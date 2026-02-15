@@ -169,18 +169,22 @@ export async function POST(request: Request) {
     })
 
     // حقن System Prompt الثابت في بداية المحادثة
+    // ✅ نستخدم sanitizedMessages (الرسائل المنظفة) وليس messages الخام
     const systemPrompt = getSiteSystemPrompt()
     const messagesWithSystem: ChatCompletionMessageParam[] = [
       {
         role: "system",
         content: systemPrompt
       },
-      ...messages
+      ...sanitizedMessages.map(msg => ({
+        role: msg.role as "user" | "assistant" | "system",
+        content: msg.content
+      }))
     ]
 
     // إذا كانت الأدوات مفعّلة، استخدم Function Calling
     if (use_tools) {
-      console.log("[Chat API] Using Function Calling with Tools")
+      console.log(`[Chat API] Using Function Calling with Tools (${sanitizedMessages.length} messages in conversation)`)
 
       try {
         // تنفيذ تدفق Function Calling الكامل
