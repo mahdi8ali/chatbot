@@ -1,0 +1,378 @@
+/**
+ * Function Calling Handler
+ * 
+ * يدير تدفق Function Calling من OpenAI:
+ * 1. يستقبل function call من OpenAI
+ * 2. يتحقق من أن الأداة مسموحة (Whitelist)
+ * 3. ينفذ الأداة عبر Service Layer
+ * 4. يُرجع النتيجة لـ OpenAI
+ */
+
+import OpenAI from "openai"
+import { ChatCompletionMessageParam } from "openai/resources/chat/completions"
+import {
+  isAllowedTool,
+  type AllowedToolName
+} from "./site-tools-definitions"
+import { executeToolByName, type APICallResult } from "./site-api-service"
+import { getFallbackResponse } from "./system-prompts"
+import {
+  isEmptyAPIResponse,
+  generateNoResultsSuggestions,
+  generateAPIErrorSuggestions,
+  extractQueryFromMessage,
+  formatSuggestionsForResponse
+} from "./smart-suggestions"
+
+/**
+ * تنظيف بيانات المشروع لتكون مختصرة ومفيدة لـ GPT
+ * يشمل الخصائص المهمة مثل المكان والمواصفات والجهة المنفذة
+ */
+function cleanProject(project: any): any {
+  if (!project || typeof project !== "object") return project
+  
+  const sectionNames = Array.isArray(project.sections)
+    ? project.sections.map((s: any) => s.name).filter(Boolean)
+    : []
+
+  // استخراج الخصائص المهمة (المكان، المواصفات، الجهة المنفذة، تاريخ الافتتاح...)
+  // لا نقطع النصوص — نرسلها كاملة حتى لا تضيع معلومات مهمة مثل عيار الذهب أو الأوزان
+  const properties: Record<string, string> = {}
+  if (Array.isArray(project.properties)) {
+    for (const prop of project.properties) {
+      const val = prop.pivot?.value || prop.value
+      if (prop.name && val && typeof val === "string") {
+        properties[prop.name] = val
+      }
+    }
+  }
+
+  // استخراج العلامات
+  const tags = Array.isArray(project.kftags)
+    ? project.kftags.map((t: any) => t.title || t.name).filter(Boolean)
+    : []
+
+  return {
+    id: project.id,
+    name: project.name,
+    description: project.description || "",
+    sections: sectionNames,
+    properties: Object.keys(properties).length > 0 ? properties : undefined,
+    tags: tags.length > 0 ? tags : undefined,
+    url: project.url || (project.id ? `https://projects.alkafeel.net/project/${project.id}` : null),
+    image_url: project.image_url || null,
+    address: project.address || null,
+  }
+}
+
+/**
+ * تنظيف نتائج الـ API قبل إرسالها لـ GPT
+ */
+function cleanResultForGPT(result: APICallResult): any {
+  if (!result.success) return result
+
+  const data = result.data
+  
+  // إذا كانت نتائج بحث (results array)
+  if (data?.results && Array.isArray(data.results)) {
+    return {
+      success: true,
+      data: {
+        results: data.results.map((p: any) => cleanProject(p)),
+        total: data.total,
+        query: data.query
+      }
+    }
+  }
+
+  // إذا كان مشروع واحد
+  if (data?.id && data?.name) {
+    return {
+      success: true,
+      data: cleanProject(data)
+    }
+  }
+
+  // فئات أو إحصائيات — إرجاع كما هي
+  return result
+}
+
+/**
+ * نتيجة معالجة Function Calling
+ */
+export interface FunctionCallResult {
+  shouldContinue: boolean // هل نحتاج لإرسال طلب آخر لـ OpenAI؟
+  messages: ChatCompletionMessageParam[] // الرسائل لإضافتها للمحادثة
+  finalResponse?: string // الرد النهائي (إذا اكتمل)
+  error?: string
+}
+
+/**
+ * معالجة tool call واحد
+ * 
+ * @param toolCall - معلومات الأداة المراد استدعاءها
+ */
+async function processToolCall(
+  toolCall: OpenAI.Chat.Completions.ChatCompletionMessageToolCall
+): Promise<{
+  tool_call_id: string
+  role: "tool"
+  content: string
+}> {
+  const toolName = toolCall.function.name
+  const toolCallId = toolCall.id
+
+  console.log(`[Function Call] Tool: ${toolName}, ID: ${toolCallId}`)
+
+  // التحقق من Whitelist
+  if (!isAllowedTool(toolName)) {
+    console.error(`[Function Call] Rejected: ${toolName} not in whitelist`)
+    return {
+      tool_call_id: toolCallId,
+      role: "tool",
+      content: JSON.stringify({
+        success: false,
+        error: `الأداة "${toolName}" غير مسموحة`,
+        message: "هذه الأداة غير متاحة حالياً في النظام."
+      })
+    }
+  }
+
+  // تحليل المعاملات
+  let args: Record<string, any>
+  try {
+    args = JSON.parse(toolCall.function.arguments || "{}")
+  } catch (error) {
+    console.error(`[Function Call] Invalid arguments:`, error)
+    return {
+      tool_call_id: toolCallId,
+      role: "tool",
+      content: JSON.stringify({
+        success: false,
+        error: "معاملات غير صالحة",
+        message: "حدث خطأ في تحليل المعاملات."
+      })
+    }
+  }
+
+  // تنفيذ الأداة
+  const result: APICallResult = await executeToolByName(
+    toolName as AllowedToolName,
+    args
+  )
+
+  // ✅ Phase 3: معالجة النتائج الفارغة مع اقتراحات ذكية
+  if (result.success && isEmptyAPIResponse(result.data)) {
+    console.log(`[Function Call] Empty results detected, generating suggestions`)
+    
+    // استخرج query من المعاملات
+    const query = args.query || args.searchTerm || args.keyword || ""
+    const category = args.category || undefined
+    
+    // توليد الاقتراحات الذكية
+    const suggestionsResponse = generateNoResultsSuggestions(query, {
+      searchedCategory: category,
+      attemptedAction: toolName
+    })
+    
+    // إرجاع النتيجة مع الاقتراحات
+    return {
+      tool_call_id: toolCallId,
+      role: "tool",
+      content: JSON.stringify({
+        success: false,
+        empty_results: true,
+        message: suggestionsResponse.message,
+        suggestions: suggestionsResponse.suggestions,
+        context: suggestionsResponse.context,
+        original_query: query
+      })
+    }
+  }
+
+  // معالجة الأخطاء مع اقتراحات
+  if (!result.success) {
+    console.error(`[Function Call] API Error:`, result.error)
+    
+    const errorSuggestions = generateAPIErrorSuggestions()
+    
+    return {
+      tool_call_id: toolCallId,
+      role: "tool",
+      content: JSON.stringify({
+        success: false,
+        error: result.error,
+        message: errorSuggestions.message,
+        suggestions: errorSuggestions.suggestions,
+        context: errorSuggestions.context
+      })
+    }
+  }
+
+  // صياغة الرد العادي (نتائج موجودة)
+  // تنظيف البيانات لتكون مختصرة ومفيدة لـ GPT
+  const cleanedResult = cleanResultForGPT(result)
+
+  const toolResponse = {
+    tool_call_id: toolCallId,
+    role: "tool" as const,
+    content: JSON.stringify(cleanedResult)
+  }
+
+  console.log(
+    `[Function Call] Result:`,
+    result.success ? "Success" : "Failed"
+  )
+
+  return toolResponse
+}
+
+/**
+ * معالجة مجموعة tool calls من OpenAI
+ * 
+ * @param toolCalls - قائمة الأدوات المطلوب استدعاءها
+ */
+export async function handleToolCalls(
+  toolCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[]
+): Promise<ChatCompletionMessageParam[]> {
+  const toolResponses: ChatCompletionMessageParam[] = []
+
+  // معالجة كل أداة
+  for (const toolCall of toolCalls) {
+    const response = await processToolCall(toolCall)
+    toolResponses.push(response)
+  }
+
+  return toolResponses
+}
+
+/**
+ * تدفق كامل لـ Function Calling
+ * 
+ * يدير التواصل المتكرر مع OpenAI حتى الحصول على رد نهائي
+ * 
+ * @param openai - عميل OpenAI
+ * @param model - نموذج OpenAI
+ * @param messages - رسائل المحادثة
+ * @param tools - الأدوات المتاحة
+ * @param maxIterations - الحد الأقصى للتكرار (لمنع حلقات لا نهائية)
+ */
+export async function executeFunctionCallingFlow(
+  openai: OpenAI,
+  model: string,
+  messages: ChatCompletionMessageParam[],
+  tools: OpenAI.Chat.Completions.ChatCompletionTool[],
+  maxIterations: number = 5
+): Promise<{
+  finalMessage: string
+  allMessages: ChatCompletionMessageParam[]
+  iterations: number
+}> {
+  let currentMessages = [...messages]
+  let iterations = 0
+  let finalResponse = ""
+
+  while (iterations < maxIterations) {
+    iterations++
+    console.log(`[Function Calling Flow] Iteration ${iterations}`)
+
+    // استدعاء OpenAI مع الأدوات
+    const response = await openai.chat.completions.create({
+      model,
+      messages: currentMessages,
+      tools,
+      tool_choice: "auto", // دع النموذج يقرر
+      temperature: 0.7,
+      max_tokens: 2000
+    })
+
+    const assistantMessage = response.choices[0].message
+
+    // إضافة رد المساعد للمحادثة
+    currentMessages.push(assistantMessage)
+
+    // إذا لم يكن هناك tool calls، انتهينا
+    if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
+      finalResponse = assistantMessage.content || ""
+      break
+    }
+
+    // معالجة tool calls
+    console.log(
+      `[Function Calling Flow] Processing ${assistantMessage.tool_calls.length} tool call(s)`
+    )
+
+    const toolResponses = await handleToolCalls(assistantMessage.tool_calls)
+
+    // إضافة نتائج الأدوات للمحادثة
+    currentMessages.push(...toolResponses)
+
+    // في التكرار التالي، سنعيد إرسال كل شيء لـ OpenAI
+    // وسيستخدم نتائج الأدوات لصياغة رد نهائي
+  }
+
+  // إذا وصلنا للحد الأقصى بدون رد نهائي
+  if (!finalResponse && iterations >= maxIterations) {
+    console.warn(`[Function Calling Flow] Max iterations reached`)
+    finalResponse = getFallbackResponse("api_error")
+  }
+
+  return {
+    finalMessage: finalResponse,
+    allMessages: currentMessages,
+    iterations
+  }
+}
+
+/**
+ * تبسيط: معالجة سريعة لـ Function Call واحد فقط
+ * (للحالات البسيطة)
+ * 
+ * @param openai - عميل OpenAI
+ * @param model - نموذج OpenAI
+ * @param messages - رسائل المحادثة
+ * @param tools - الأدوات المتاحة
+ */
+export async function executeSimpleFunctionCall(
+  openai: OpenAI,
+  model: string,
+  messages: ChatCompletionMessageParam[],
+  tools: OpenAI.Chat.Completions.ChatCompletionTool[]
+): Promise<string> {
+  try {
+    // استدعاء أول
+    const firstResponse = await openai.chat.completions.create({
+      model,
+      messages,
+      tools,
+      tool_choice: "auto",
+      temperature: 0.7
+    })
+
+    const firstMessage = firstResponse.choices[0].message
+
+    // إذا لم يكن هناك tool call، نرجع الرد مباشرة
+    if (!firstMessage.tool_calls || firstMessage.tool_calls.length === 0) {
+      return firstMessage.content || ""
+    }
+
+    // تنفيذ tool call
+    const toolResponses = await handleToolCalls(firstMessage.tool_calls)
+
+    // استدعاء ثاني مع نتائج الأدوات
+    const secondResponse = await openai.chat.completions.create({
+      model,
+      messages: [
+        ...messages,
+        firstMessage,
+        ...toolResponses
+      ],
+      temperature: 0.7
+    })
+
+    return secondResponse.choices[0].message.content || ""
+  } catch (error: any) {
+    console.error("[Simple Function Call] Error:", error)
+    return getFallbackResponse("api_error")
+  }
+}

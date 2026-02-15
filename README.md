@@ -18,6 +18,35 @@ Be back soon.
 
 -- Mckay
 
+## 🚀 Implementation Phases Documentation
+
+This project follows a structured 4-phase approach for building a secure visitor chatbot.
+
+### ⚡ Quick Start
+**New here?** Start with **[QUICK-START.md](QUICK-START.md)** to get running in 10 minutes!
+
+### 📚 Phase Documentation
+1. **[Phase 1 - System Prompts](PHASE-1-SYSTEM-PROMPTS.md)** - Constrained chatbot with strict behavioral rules
+2. **[Phase 2 - Function Calling](PHASE-2-FUNCTION-CALLING.md)** - REST API integration via OpenAI Tools/Function Calling
+3. **[Phase 3 - No Hallucination](PHASE-3-NO-HALLUCINATION.md)** - Anti-hallucination system with smart suggestions
+4. **[Phase 4 - Security](PHASE-4-SECURITY.md)** - Security & access control for public deployment
+
+### 🧪 Testing & Deployment
+- **[Security Testing Guide](SECURITY-TESTING-GUIDE.md)** - Comprehensive security testing procedures
+- **[Production Deployment](PRODUCTION-DEPLOYMENT.md)** - Complete deployment guide for production
+- **[All Phases Summary](ALL-PHASES-SUMMARY.md)** - High-level overview of the entire project
+
+### 🎯 Key Features
+- ✅ **Constrained Bot**: Only answers about projects.alkafeel.net projects
+- ✅ **REST API Integration**: 5 tools for project data retrieval via Function Calling
+- ✅ **No Hallucination**: Displays API sources with metadata
+- ✅ **Smart Suggestions**: Context-aware follow-up questions
+- ✅ **Rate Limiting**: 20 requests/minute per IP with 5-minute block
+- ✅ **Data Sanitization**: XSS protection + PII masking
+- ✅ **API Resilience**: 15s timeout with 2 retries + exponential backoff
+- ✅ **CORS Security**: Whitelist-based origin checking
+- ✅ **Privacy Policy**: Explicitly forbids requesting personal data
+
 ## Official Hosted Version
 
 Use Chatbot UI without having to host it yourself!
