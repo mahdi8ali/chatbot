@@ -266,7 +266,7 @@ async function getAllProjects(): Promise<APICallResult> {
  * @param limit - عدد النتائج
  */
 export async function siteSearch(
-  query: string,
+  query?: string,
   section?: string,
   limit: number = 10
 ): Promise<APICallResult> {
@@ -278,13 +278,16 @@ export async function siteSearch(
 
   const projects = allProjects.data as any[]
 
+  // ✅ معالجة query فارغ أو undefined — GPT أحياناً يرسل section فقط بدون query
+  const safeQuery = (query || "").trim()
+
   // تقسيم الاستعلام إلى كلمات فردية للبحث المرن
-  const queryWords = query
+  const queryWords = safeQuery
     .toLowerCase()
     .split(/\s+/)
     .filter(w => w.length > 1) // تجاهل الأحرف المفردة
   
-  const lowerQuery = query.toLowerCase()
+  const lowerQuery = safeQuery.toLowerCase()
 
   /**
    * استخراج كل النصوص القابلة للبحث من مشروع
@@ -405,7 +408,7 @@ export async function siteSearch(
     data: {
       results: filtered,
       total: filtered.length,
-      query
+      query: safeQuery || section || ""
     }
   }
 }

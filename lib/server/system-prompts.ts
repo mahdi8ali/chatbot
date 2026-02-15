@@ -122,7 +122,7 @@ export const FALLBACK_OUT_OF_SCOPE = `أنا متخصص في الإجابة عن
 /**
  * رسالة ترحيبية افتراضية
  */
-export const WELCOME_MESSAGE = `مرحباً بك في مساعد مشاريع الكفيل! 👋
+export const WELCOME_MESSAGE = `مرحباً بك ، انا مساعدك الشخصي ! 👋
 
 أنا هنا لمساعدتك في الاستعلام عن:
 - المشاريع والبرامج المتاحة
