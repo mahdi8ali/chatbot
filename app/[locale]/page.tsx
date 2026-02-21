@@ -135,11 +135,11 @@ export default function HomePage() {
           display: flex;
           justify-content: center;
           align-items: center;
-          padding: 16px !important;
+          padding: 10px !important;
         }
         .chat-container {
           max-width: 460px;
-          height: 90vh;
+          height: 85vh;
           background: #111827;
           border-radius: 8px;
           display: flex;
