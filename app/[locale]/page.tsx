@@ -139,7 +139,7 @@ export default function HomePage() {
         }
         .chat-container {
           max-width: 460px;
-          height: 95vh;
+          height: 90vh;
           background: #111827;
           border-radius: 8px;
           display: flex;
