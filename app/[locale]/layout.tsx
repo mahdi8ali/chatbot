@@ -2,8 +2,8 @@ import { Metadata, Viewport } from "next"
 import { ReactNode } from "react"
 import "./globals.css"
 
-const APP_NAME = "مساعد مشاريع الكفيل"
-const APP_DEFAULT_TITLE = "مساعد مشاريع الكفيل"
+const APP_NAME = "مساعد مشاريع العتبة العباسية"
+const APP_DEFAULT_TITLE = "مساعد مشاريع العتبة العباسية"
 const APP_DESCRIPTION = "مساعد ذكي للاستعلام عن مشاريع العتبة العباسية المقدسة"
 
 interface RootLayoutProps {

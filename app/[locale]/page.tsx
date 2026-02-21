@@ -354,16 +354,67 @@ export default function HomePage() {
         .message.bot ol, .message.bot ul { padding-right: 20px; margin: 6px 0; }
         .message.bot li { margin: 4px 0; }
         .message.bot p { margin: 4px 0; }
+
+        /* ===== Mobile Responsive ===== */
+        @media (max-width: 768px) {
+          body {
+            padding: 0 !important;
+            align-items: stretch;
+          }
+          .chat-container {
+            width: 100%;
+            max-width: 100%;
+            height: 100vh;
+            height: 100dvh;
+            border-radius: 0;
+            border: none;
+            box-shadow: none;
+          }
+          .chat-header {
+            padding: 14px 16px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+          }
+          .chat-messages {
+            padding: 12px;
+          }
+          .message {
+            max-width: 92%;
+            font-size: 14px;
+          }
+          .chat-input {
+            padding: 10px 12px;
+            padding-bottom: max(10px, env(safe-area-inset-bottom));
+            position: sticky;
+            bottom: 0;
+            z-index: 10;
+          }
+          .welcome {
+            padding: 20px 16px;
+          }
+          .welcome .icon img {
+            width: 60px;
+            height: 60px;
+          }
+          .quick-btns {
+            gap: 6px;
+          }
+          .quick-btn {
+            padding: 6px 10px;
+            font-size: 11px;
+          }
+        }
       `}</style>
 
       <div className="chat-container">
         {/* Header */}
         <div className="chat-header">
           <div className="avatar">
-            <img src="/logo.png" alt="مساعد الكفيل" />
+            <img src="/logo.png" alt="مساعد العتبة العباسية" />
           </div>
           <div className="info">
-            <h2>مشاريع الكفيل</h2>
+            <h2>مشاريع العتبة العباسية</h2>
             <p>
               <span className="status-dot"></span> متصل
             </p>
@@ -378,7 +429,7 @@ export default function HomePage() {
           {showWelcome && (
             <div className="welcome">
               <div className="icon">
-                <img src="/logo.png" alt="مساعد الكفيل" />
+                <img src="/logo.png" alt="مساعد العتبة العباسية" />
               </div>
               <h3>مرحباً بك ، انا مساعدك الشخصي</h3>
               <p>
