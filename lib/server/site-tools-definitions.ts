@@ -99,7 +99,7 @@ export const TOOL_GET_PROJECT_BY_ID: ChatCompletionTool = {
 
 أمثلة:
 - "أخبرني عن المشروع رقم 123"
-- "ما هي تفاصيل مشروع مدرسة الكفيل؟"
+- "ما هي تفاصيل مشروع مستشفى العتبة العباسية؟"
 - "معلومات عن مشروع ID 456"`,
     parameters: {
       type: "object",
