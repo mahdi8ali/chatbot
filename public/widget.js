@@ -628,6 +628,7 @@
       this.addLoadingMessage(loadingId);
 
       try {
+        // ✅ إرسال بنفس الشكل الذي يتوقعه /api/chat/site
         const response = await fetch(this.config.apiEndpoint, {
           method: 'POST',
           headers: {
@@ -635,39 +636,115 @@
           },
           body: JSON.stringify({
             messages: this.messages,
-            chatSettings: {
-              model: 'gpt-4o',
-              temperature: 0.5
-            }
+            temperature: 0.7,
+            max_tokens: 2000,
+            use_tools: true
           })
         });
 
+        // حذف loading
+        this.removeLoadingEl(loadingId);
+
+        // ✅ معالجة أخطاء HTTP مع استخدام fallback من الـ API
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+          let errMsg = '⚠️ عذراً، حدث خطأ. يُرجى المحاولة مرة أخرى.';
+          try {
+            const errData = await response.json();
+            errMsg = errData.fallback || errData.error || errMsg;
+          } catch(e) { /* ignore parse error */ }
+          this.addMessage('assistant', errMsg);
+          return;
         }
 
-        const data = await response.json();
-        const reply = data.message || data.reply || 'عذراً، لم أتمكن من فهم الرد.';
+        // ✅ تحديد نوع الرد: JSON (Function Calling) أو Stream (الوضع العادي)
+        const contentType = (response.headers.get('content-type') || '').toLowerCase();
 
-        // حذف loading
-        const loadingEl = document.getElementById(loadingId);
-        if (loadingEl) loadingEl.remove();
+        if (contentType.includes('application/json')) {
+          // --- الوضع الأساسي: Function Calling يرجع JSON ---
+          const data = await response.json();
+          const reply = data.message || 'عذراً، لم أتمكن من الحصول على رد.';
+          this.addMessage('assistant', reply);
 
-        // إضافة رد البوت
-        this.addMessage('assistant', reply);
+        } else if (response.body) {
+          // --- الوضع الاحتياطي: Stream نصي (text/plain) ---
+          await this.handleStreamResponse(response);
+
+        } else {
+          // --- fallback أخير: نص عادي ---
+          const plainText = await response.text();
+          this.addMessage('assistant', plainText || 'لم يتم استلام رد.');
+        }
 
       } catch (error) {
         console.error('[AlKafeel Widget] Error:', error);
-        
-        const loadingEl = document.getElementById(loadingId);
-        if (loadingEl) loadingEl.remove();
-
+        this.removeLoadingEl(loadingId);
         this.addMessage('assistant', '⚠️ عذراً، حدث خطأ في الاتصال. يُرجى المحاولة مرة أخرى.');
       } finally {
         this.isLoading = false;
         this.elements.sendBtn.disabled = false;
         this.elements.input.focus();
       }
+    }
+
+    /**
+     * معالجة الرد المتدفق (Streaming) — يعرض النص حرفاً بحرف
+     */
+    async handleStreamResponse(response) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = '';
+
+      // إنشاء عنصر رسالة فارغ للتحديث التدريجي
+      const streamId = 'stream-' + Date.now();
+      const { contentEl } = this.createAssistantBubble(streamId);
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          fullText += decoder.decode(value, { stream: true });
+          contentEl.innerHTML = this.formatMessage(fullText);
+          this.scrollToBottom();
+        }
+      } catch (e) {
+        console.error('[AlKafeel Widget] Stream error:', e);
+        if (!fullText) fullText = '⚠️ حدث خطأ أثناء استلام الرد.';
+      }
+
+      // حفظ الرد الكامل في سجل المحادثة
+      this.messages.push({ role: 'assistant', content: fullText });
+    }
+
+    /**
+     * إنشاء فقاعة رسالة المساعد (بدون حفظ في history)
+     * تُستخدم للـ streaming حيث نحدّث المحتوى تدريجياً
+     */
+    createAssistantBubble(id) {
+      const messageEl = this.createElement('div', {
+        className: 'alkw-message alkw-assistant',
+        id: id
+      });
+      const avatar = this.createElement('div', {
+        className: 'alkw-avatar',
+        innerHTML: '🤖'
+      });
+      const contentEl = this.createElement('div', {
+        className: 'alkw-message-content'
+      });
+      messageEl.appendChild(avatar);
+      messageEl.appendChild(contentEl);
+      this.elements.messagesArea.appendChild(messageEl);
+      this.scrollToBottom();
+      return { messageEl, contentEl };
+    }
+
+    /**
+     * حذف عنصر loading بالـ ID
+     */
+    removeLoadingEl(id) {
+      const el = document.getElementById(id);
+      if (el) el.remove();
     }
 
     addMessage(role, content) {

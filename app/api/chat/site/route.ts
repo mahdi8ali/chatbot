@@ -34,14 +34,9 @@ const ALLOWED_ORIGINS = [
  * Security Headers
  */
 function getSecurityHeaders(origin?: string | null): HeadersInit {
-  // التحقق من Origin
-  const allowOrigin =
-    origin && ALLOWED_ORIGINS.includes(origin)
-      ? origin
-      : ALLOWED_ORIGINS[0]
-
+  // السماح لأي origin لأن الودجت يُضمّن في مواقع خارجية
   return {
-    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Origin": origin || "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Max-Age": "86400",

@@ -55,19 +55,33 @@ export default function ChatWidget({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: newMessages,
-          chatSettings: {
-            model: "gpt-4o",
-            prompt: "user",
-            temperature: 0.5
-          }
+          temperature: 0.7,
+          max_tokens: 2000,
+          use_tools: true
         })
       })
 
       if (!response.ok) throw new Error("خطأ " + response.status)
 
-      const data = await response.json()
-      const botReply =
-        data.message || data.reply || "لم أتمكن من فهم الرد."
+      const contentType = (response.headers.get("content-type") || "").toLowerCase()
+      let botReply = ""
+
+      if (contentType.includes("application/json")) {
+        // Function Calling mode — JSON response
+        const data = await response.json()
+        botReply = data.message || "لم أتمكن من فهم الرد."
+      } else if (response.body) {
+        // Standard fallback — streaming text
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          botReply += decoder.decode(value, { stream: true })
+        }
+      } else {
+        botReply = await response.text() || "لم يتم استلام رد."
+      }
 
       setMessages([
         ...newMessages,
