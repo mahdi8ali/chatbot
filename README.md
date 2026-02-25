@@ -12,7 +12,7 @@
 
 ## 🚀 تضمين سريع (Quick Integration)
 
-أضف هذا الكود في موقعك قبل `</body>`:
+**سطرين فقط! أضف هذا الكود في موقعك قبل `</body>`:**
 
 ```html
 <script src="https://YOUR-VERCEL-DOMAIN/api/widget"></script>
@@ -25,7 +25,9 @@
 </script>
 ```
 
-📖 **[دليل التضمين الكامل](WIDGET_INTEGRATION.md)**
+✨ **بدون dependencies، 22KB فقط، يعمل مع أي موقع!**
+
+📖 **[دليل التضمين الكامل](WIDGET_INTEGRATION.md)** | 🚀 **[دليل النشر](DEPLOY_GUIDE.md)** | 📝 **[Laravel Integration](QUICK_START.md)**
 
 ---
 
@@ -52,16 +54,24 @@
 
 **مساعد مشاريع العتبة العباسية** هو تطبيق ويب ذكي مبني بتقنية Next.js 14 يستخدم نماذج OpenAI GPT-4o للإجابة على استفسارات المستخدمين حول مشاريع وأنشطة العتبة العباسية المقدسة.
 
-### 🎁 الجديد: Widget Mode
+### 🎁 الجديد: Embeddable Widget Mode
 
-الآن يمكن تضمين المساعد كـ **Widget عائم** في أي موقع بسطر كود واحد! 
+الآن يمكن تضمين المساعد كـ **Widget عائم** في أي موقع!
 
-**المميزات:**
-- ✅ زر عائم قابل للتخصيص
-- ✅ يعمل بدون iframe
-- ✅ سهل التكامل مع أي موقع
-- ✅ يدعم Laravel Blade وجميع الأنظمة
-- ✅ متجاوب مع Mobile & Desktop
+**Widget Specs:**
+- 📦 **حجم صغير**: 22KB فقط (gzipped: ~8KB)
+- ⚡ **صفر Dependencies**: Vanilla JavaScript بدون React/Vue
+- 🎨 **Style Isolation**: جميع الـ CSS prefixed بـ `alkw-*`
+- 🔒 **Secure**: CORS headers + Rate limiting + XSS protection
+- 📱 **Responsive**: يعمل على Mobile & Desktop
+- 🌍 **RTL Support**: دعم كامل للعربية
+- 🚀 **Fast**: يُحمل async، لا يؤثر على سرعة الموقع
+
+**Integration Methods:**
+- ✅ Laravel Blade Templates
+- ✅ Static HTML
+- ✅ WordPress / Drupal
+- ✅ أي موقع يدعم JavaScript
 
 ### الهدف
 
