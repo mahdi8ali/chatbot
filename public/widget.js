@@ -137,11 +137,11 @@
     '.alkw-message.alkw-assistant{align-self:flex-end;background:#1f2937;color:#e5e7eb;border:1px solid #374151}',
 
     /* ── Rich text inside bubbles ── */
-    '.alkw-message a{color:#34d399;text-decoration:none;display:inline}',
+    '.alkw-message a{color:#34d399;text-decoration:none;display:inline;cursor:pointer}',
     '.alkw-message a:hover{text-decoration:underline}',
     '.alkw-message strong{font-weight:600;display:inline;color:#fff}',
     '.alkw-message ol,.alkw-message ul{margin:6px 0;padding-right:20px;display:block}',
-    '.alkw-message li{margin:4px 0;display:list-item;color:inherit}',
+    '.alkw-message li{margin:4px 0;display:list-item;color:#e2e5eb}',
     '.alkw-message p{margin:4px 0;display:block}',
     '.alkw-message br{display:block}',
 
@@ -229,7 +229,7 @@
       title:       'مساعدك في المشاريع',
       subtitle:    'اسأل عن مشاريع العتبة العباسية',
       position:    'left',
-      buttonText:  '💬',
+      buttonText:  '<svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 27C18 22.0294 22.0294 18 27 18H29C33.9706 18 38 22.0294 38 27C38 31.9706 33.9706 36 29 36H28.3284L24.0607 40.2678C23.1157 41.2128 21.5 40.5858 21.5 39.2678V36C19.134 36 18 34.866 18 33V27Z" stroke="white" stroke-width="3"/></svg>',
       buttonSize:  '60px',
       zIndex:      999998,
     };
