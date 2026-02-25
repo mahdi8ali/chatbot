@@ -29,7 +29,7 @@
       'all:initial;',                           // ← reset ALL inherited styles
       'position:fixed;bottom:20px;',
       'width:60px;height:60px;border-radius:50%;',
-      'background:linear-gradient(135deg,#1e40af 0%,#7c3aed 100%);',
+      'background:#04504d;',
       'color:#fff;border:none;font-size:28px;cursor:pointer;',
       'box-shadow:0 4px 12px rgba(0,0,0,.3);z-index:999998;',
       'transition:all .3s cubic-bezier(.4,0,.2,1);',
@@ -39,7 +39,7 @@
     '}',
     '.alkw-chat-button.alkw-left{left:20px}',
     '.alkw-chat-button.alkw-right{right:20px}',
-    '.alkw-chat-button:hover{transform:scale(1.1);box-shadow:0 6px 20px rgba(30,64,175,.5)}',
+    '.alkw-chat-button:hover{transform:scale(1.1);box-shadow:0 6px 20px rgba(4,80,77,.5)}',
     '.alkw-chat-button:active{transform:scale(.95)}',
     '.alkw-chat-button.alkw-open{transform:rotate(180deg)}',
     '.alkw-chat-button.alkw-open:hover{transform:rotate(180deg) scale(1.1)}',
@@ -54,14 +54,14 @@
   //  §2  PANEL CSS  –  injected ONLY on first open  (lazy)
   // ==========================================================================
   var PANEL_STYLES = [
-    /* ── Hard reset: cut off ALL inheritance from host page ── */
+    /* ── Hard reset ── */
     '.alkw-widget-container,.alkw-widget-container *,.alkw-widget-container *::before,.alkw-widget-container *::after{',
       'all:initial;box-sizing:border-box;font-family:inherit;',
     '}',
 
     /* ── Container ── */
     '.alkw-widget-container{',
-      'position:fixed;bottom:100px;width:400px;height:600px;',
+      'position:fixed;bottom:100px;width:460px;height:600px;',
       'max-width:calc(100vw - 40px);max-height:calc(100vh - 140px);',
       'z-index:999999;opacity:0;visibility:hidden;',
       'transform:translateY(20px) scale(.95);',
@@ -75,119 +75,125 @@
 
     /* ── Inner wrapper ── */
     '.alkw-widget-inner{',
-      'width:100%;height:100%;background:#111827;border-radius:12px;',
+      'width:100%;height:100%;background:#111827;border-radius:8px;',
       'display:flex;flex-direction:column;overflow:hidden;',
-      'box-shadow:0 20px 60px rgba(0,0,0,.5);border:1px solid #1f2937;',
+      'box-shadow:0 8px 40px rgba(0,0,0,.5);border:1px solid #1f2937;',
     '}',
 
-    /* ── Header ── */
+    /* ── Header (green) ── */
     '.alkw-header{',
-      'background:linear-gradient(135deg,#1e40af 0%,#7c3aed 100%);',
-      'color:#fff;padding:16px;display:flex;justify-content:space-between;',
-      'align-items:center;border-bottom:1px solid rgba(255,255,255,.1);flex-shrink:0;',
+      'background:#04504d;color:#fff;padding:16px 20px;',
+      'display:flex;align-items:center;gap:12px;flex-shrink:0;',
     '}',
-    '.alkw-header-text{display:block}',
-    '.alkw-header-text h2{margin:0;font-size:18px;font-weight:600;line-height:1.2;color:#fff;display:block}',
-    '.alkw-header-text p{margin:4px 0 0;font-size:12px;opacity:.9;line-height:1.2;color:#fff;display:block}',
+    '.alkw-header-avatar{width:42px;height:42px;border-radius:50%;overflow:hidden;flex-shrink:0;display:block}',
+    '.alkw-header-avatar img{width:100%;height:100%;object-fit:cover;display:block}',
+    '.alkw-header-info{display:block;flex:1}',
+    '.alkw-header-info h2{margin:0;font-size:15px;font-weight:600;line-height:1.2;color:#fff;display:block}',
+    '.alkw-header-info p{margin:2px 0 0;font-size:12px;line-height:1.2;color:#a7f3d0;display:block}',
+    '.alkw-status-dot{',
+      'width:8px;height:8px;background:#34d399;border-radius:50%;',
+      'display:inline-block;margin-left:5px;animation:alkw-statusPulse 2s infinite;',
+    '}',
+    '@keyframes alkw-statusPulse{0%,100%{opacity:1}50%{opacity:.4}}',
     '.alkw-close-btn{',
       'all:initial;background:rgba(255,255,255,.15);border:none;padding:6px 12px;',
-      'border-radius:6px;color:#fff;font-size:13px;cursor:pointer;',
+      'border-radius:8px;color:#fff;font-size:12px;cursor:pointer;',
       'transition:background .2s;font-family:inherit;',
     '}',
     '.alkw-close-btn:hover{background:rgba(255,255,255,.25)}',
 
     /* ── Messages area ── */
     '.alkw-messages{',
-      'flex:1;overflow-y:auto;padding:16px;background:#0f172a;',
-      'display:flex;flex-direction:column;gap:12px;',
+      'flex:1;overflow-y:auto;padding:16px;background:#111827;',
+      'display:flex;flex-direction:column;gap:12px;scroll-behavior:smooth;',
     '}',
-    '.alkw-messages::-webkit-scrollbar{width:6px}',
-    '.alkw-messages::-webkit-scrollbar-track{background:#1e293b;border-radius:3px}',
-    '.alkw-messages::-webkit-scrollbar-thumb{background:#475569;border-radius:3px}',
-    '.alkw-messages::-webkit-scrollbar-thumb:hover{background:#64748b}',
+    '.alkw-messages::-webkit-scrollbar{width:4px}',
+    '.alkw-messages::-webkit-scrollbar-track{background:transparent}',
+    '.alkw-messages::-webkit-scrollbar-thumb{background:#374151;border-radius:4px}',
 
     /* ── Welcome ── */
-    '.alkw-welcome{text-align:center;padding:40px 20px;color:#94a3b8;display:block}',
-    '.alkw-welcome h3{color:#fff;margin:0 0 12px;font-size:20px;font-weight:600;display:block}',
-    '.alkw-welcome p{margin:0 0 20px;font-size:14px;line-height:1.6;color:#94a3b8;display:block}',
+    '.alkw-welcome{text-align:center;padding:30px 20px;color:#6b7280;display:block}',
+    '.alkw-welcome-icon{margin-bottom:12px;display:block}',
+    '.alkw-welcome-icon img{width:70px;height:70px;border-radius:50%;object-fit:cover;display:inline-block}',
+    '.alkw-welcome h3{color:#9ca3af;margin:0 0 8px;font-size:16px;font-weight:600;display:block}',
+    '.alkw-welcome p{margin:0 0 16px;font-size:13px;line-height:1.8;color:#6b7280;display:block}',
     '.alkw-quick-buttons{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:16px}',
     '.alkw-quick-btn{',
-      'all:initial;background:#1e293b;border:1px solid #334155;padding:8px 14px;',
-      'border-radius:8px;color:#e2e8f0;font-size:13px;cursor:pointer;',
+      'all:initial;background:#1f2937;border:1px solid #374151;padding:7px 14px;',
+      'border-radius:8px;color:#d1d5db;font-size:12px;cursor:pointer;',
       'transition:all .2s;display:inline-flex;align-items:center;gap:6px;font-family:inherit;',
     '}',
-    '.alkw-quick-btn:hover{background:#334155;border-color:#475569;transform:translateY(-1px)}',
+    '.alkw-quick-btn:hover{background:#065f46;border-color:#047857;color:#fff}',
     '.alkw-quick-btn span{display:inline;color:inherit;font-size:inherit}',
 
-    /* ── Message bubble ── */
-    '.alkw-message{display:flex;gap:10px;animation:alkw-fadeInUp .3s ease;max-width:100%}',
-    '@keyframes alkw-fadeInUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}',
-    '.alkw-message.alkw-user{flex-direction:row-reverse}',
-    '.alkw-avatar{',
-      'width:32px;height:32px;border-radius:50%;display:flex;',
-      'align-items:center;justify-content:center;font-size:16px;flex-shrink:0;',
+    /* ── Message bubble (no avatar, align-self) ── */
+    '.alkw-message{',
+      'max-width:85%;padding:10px 14px;border-radius:12px;font-size:14px;',
+      'line-height:1.7;word-wrap:break-word;overflow-wrap:break-word;',
+      'animation:alkw-fadeInUp .3s ease;display:block;',
     '}',
-    '.alkw-message.alkw-user .alkw-avatar{background:linear-gradient(135deg,#3b82f6 0%,#8b5cf6 100%)}',
-    '.alkw-message.alkw-assistant .alkw-avatar{background:linear-gradient(135deg,#10b981 0%,#06b6d4 100%)}',
-    '.alkw-message-content{',
-      'max-width:calc(100% - 42px);padding:12px 16px;border-radius:12px;',
-      'line-height:1.6;font-size:14px;word-wrap:break-word;overflow-wrap:break-word;',
-      'display:block;color:#e2e8f0;',
-    '}',
-    '.alkw-message.alkw-user .alkw-message-content{',
-      'background:linear-gradient(135deg,#3b82f6 0%,#8b5cf6 100%);color:#fff;border-bottom-left-radius:4px;',
-    '}',
-    '.alkw-message.alkw-assistant .alkw-message-content{',
-      'background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-bottom-right-radius:4px;',
-    '}',
+    '@keyframes alkw-fadeInUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}',
+    '.alkw-message.alkw-user{align-self:flex-start;background:#065f46;color:#fff}',
+    '.alkw-message.alkw-assistant{align-self:flex-end;background:#1f2937;color:#e5e7eb;border:1px solid #374151}',
 
     /* ── Rich text inside bubbles ── */
-    '.alkw-message-content a{color:#60a5fa;text-decoration:underline;display:inline}',
-    '.alkw-message-content strong{font-weight:600;display:inline;color:inherit}',
-    '.alkw-message-content ol,.alkw-message-content ul{margin:8px 0;padding-right:20px;display:block}',
-    '.alkw-message-content li{margin:4px 0;display:list-item;color:inherit}',
-    '.alkw-message-content br{display:block}',
+    '.alkw-message a{color:#34d399;text-decoration:none;display:inline}',
+    '.alkw-message a:hover{text-decoration:underline}',
+    '.alkw-message strong{font-weight:600;display:inline;color:#fff}',
+    '.alkw-message ol,.alkw-message ul{margin:6px 0;padding-right:20px;display:block}',
+    '.alkw-message li{margin:4px 0;display:list-item;color:inherit}',
+    '.alkw-message p{margin:4px 0;display:block}',
+    '.alkw-message br{display:block}',
 
     /* ── Loading dots ── */
-    '.alkw-loading{display:flex;gap:6px;padding:12px 16px}',
-    '.alkw-loading span{',
-      'width:8px;height:8px;border-radius:50%;background:#60a5fa;',
-      'animation:alkw-pulse 1.4s infinite;display:block;',
+    '.alkw-loading-wrapper{',
+      'align-self:flex-end;background:#1f2937;border:1px solid #374151;',
+      'padding:12px 18px;border-radius:12px;display:flex;gap:5px;',
+      'animation:alkw-fadeInUp .3s ease;',
     '}',
-    '.alkw-loading span:nth-child(2){animation-delay:.2s}',
-    '.alkw-loading span:nth-child(3){animation-delay:.4s}',
-    '@keyframes alkw-pulse{0%,80%,100%{opacity:.3;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}',
+    '.alkw-loading-wrapper span{',
+      'width:7px;height:7px;border-radius:50%;background:#6b7280;',
+      'animation:alkw-bounce 1.4s infinite ease-in-out;display:block;',
+    '}',
+    '.alkw-loading-wrapper span:nth-child(2){animation-delay:.2s}',
+    '.alkw-loading-wrapper span:nth-child(3){animation-delay:.4s}',
+    '@keyframes alkw-bounce{0%,80%,100%{transform:scale(.6);opacity:.4}40%{transform:scale(1);opacity:1}}',
 
     /* ── Input area ── */
-    '.alkw-input-area{padding:16px;background:#1e293b;border-top:1px solid #334155;flex-shrink:0;display:block}',
+    '.alkw-input-area{padding:12px 16px;background:#111827;border-top:1px solid #1f2937;flex-shrink:0;display:block}',
     '.alkw-input-wrapper{display:flex;gap:10px;align-items:flex-end}',
     '.alkw-textarea{',
-      'all:initial;flex:1;background:#0f172a;border:1px solid #334155;border-radius:8px;',
-      'padding:12px 14px;color:#fff;font-size:14px;font-family:inherit;',
-      'resize:none;max-height:120px;min-height:44px;line-height:1.4;',
+      'all:initial;flex:1;background:#1f2937;border:1px solid #374151;border-radius:12px;',
+      'padding:10px 14px;color:#e5e7eb;font-size:14px;font-family:inherit;',
+      'resize:none;max-height:100px;min-height:42px;line-height:1.5;',
       'transition:border-color .2s;direction:rtl;display:block;',
     '}',
-    '.alkw-textarea:focus{outline:none;border-color:#3b82f6}',
-    '.alkw-textarea::placeholder{color:#64748b}',
+    '.alkw-textarea:focus{outline:none;border-color:#047857}',
+    '.alkw-textarea::placeholder{color:#6b7280}',
     '.alkw-send-btn{',
-      'all:initial;background:linear-gradient(135deg,#3b82f6 0%,#8b5cf6 100%);',
-      'border:none;padding:12px 20px;border-radius:8px;color:#fff;font-size:14px;',
-      'font-weight:500;cursor:pointer;transition:all .2s;min-width:70px;',
-      'font-family:inherit;text-align:center;display:block;',
+      'all:initial;width:42px;height:42px;background:#f3bf3d;',
+      'border:none;border-radius:12px;color:#fff;font-size:18px;',
+      'cursor:pointer;display:flex;align-items:center;justify-content:center;',
+      'transition:background .2s;flex-shrink:0;transform:scaleX(-1);',
     '}',
-    '.alkw-send-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 4px 12px rgba(59,130,246,.4)}',
-    '.alkw-send-btn:active:not(:disabled){transform:translateY(0)}',
-    '.alkw-send-btn:disabled{opacity:.5;cursor:not-allowed}',
+    '.alkw-send-btn:hover:not(:disabled){background:#d4a832}',
+    '.alkw-send-btn:disabled{background:#374151;cursor:not-allowed}',
 
     /* ── Mobile ── */
     '@media(max-width:768px){',
       '.alkw-widget-container{left:10px!important;right:10px!important;bottom:80px;width:calc(100vw - 20px);height:calc(100vh - 100px);max-width:100%;max-height:calc(100vh - 100px)}',
-      '.alkw-widget-inner{border-radius:8px}',
+      '.alkw-widget-inner{border-radius:0}',
+      '.alkw-header{padding:14px 16px}',
+      '.alkw-messages{padding:12px}',
+      '.alkw-message{max-width:92%}',
+      '.alkw-welcome-icon img{width:60px;height:60px}',
+      '.alkw-quick-btn{padding:6px 10px;font-size:11px}',
+      '.alkw-input-area{padding:10px 12px}',
     '}',
 
     /* ── Reduced motion ── */
     '@media(prefers-reduced-motion:reduce){',
-      '.alkw-widget-container,.alkw-chat-button,.alkw-message{animation:none!important;transition:none!important}',
+      '.alkw-widget-container,.alkw-chat-button,.alkw-message,.alkw-loading-wrapper{animation:none!important;transition:none!important}',
     '}',
   ].join('\n');
 
@@ -287,20 +293,22 @@
     });
     this.el.container.style.zIndex = this.config.zIndex + 1;
 
+    var logoUrl = this._logoUrl();
     this.el.container.innerHTML = [
       '<div class="alkw-widget-inner">',
         '<div class="alkw-header">',
-          '<div class="alkw-header-text">',
+          '<div class="alkw-header-avatar"><img src="' + logoUrl + '" alt=""></div>',
+          '<div class="alkw-header-info">',
             '<h2>' + _esc(this.config.title) + '</h2>',
-            '<p>'  + _esc(this.config.subtitle) + '</p>',
+            '<p><span class="alkw-status-dot"></span> متصل</p>',
           '</div>',
           '<button class="alkw-close-btn">\u2715 إغلاق</button>',
         '</div>',
         '<div class="alkw-messages">' + this._welcomeHTML() + '</div>',
         '<div class="alkw-input-area">',
           '<div class="alkw-input-wrapper">',
-            '<textarea class="alkw-textarea" placeholder="اكتب سؤالك هنا..." rows="1"></textarea>',
-            '<button class="alkw-send-btn">إرسال</button>',
+            '<textarea class="alkw-textarea" placeholder="اكتب رسالتك هنا..." rows="1"></textarea>',
+            '<button class="alkw-send-btn">\u27A4</button>',
           '</div>',
         '</div>',
       '</div>',
@@ -466,33 +474,23 @@
   AlkafeelChatWidget.prototype.addMessage = function(role, content) {
     this.messages.push({ role: role, content: content });
 
-    var row = _el('div', { className: 'alkw-message alkw-' + role });
-    var av  = _el('div', { className: 'alkw-avatar', innerHTML: role === 'user' ? '👤' : '🤖' });
-    var bub = _el('div', { className: 'alkw-message-content', innerHTML: this._fmt(content) });
-    row.appendChild(av);
-    row.appendChild(bub);
-    this.el.messagesArea.appendChild(row);
+    var bub = _el('div', { className: 'alkw-message alkw-' + role, innerHTML: this._fmt(content) });
+    this.el.messagesArea.appendChild(bub);
     this._scroll();
   };
 
   AlkafeelChatWidget.prototype._addLoading = function(id) {
-    var row = _el('div', { className: 'alkw-message alkw-assistant' });
-    row.setAttribute('data-alkw-id', id);
-    var av  = _el('div', { className: 'alkw-avatar', innerHTML: '🤖' });
-    var bub = _el('div', { className: 'alkw-message-content' });
-    bub.innerHTML = '<div class="alkw-loading"><span></span><span></span><span></span></div>';
-    row.appendChild(av); row.appendChild(bub);
-    this.el.messagesArea.appendChild(row);
+    var el = _el('div', { className: 'alkw-loading-wrapper' });
+    el.setAttribute('data-alkw-id', id);
+    el.innerHTML = '<span></span><span></span><span></span>';
+    this.el.messagesArea.appendChild(el);
     this._scroll();
   };
 
   AlkafeelChatWidget.prototype._makeBubble = function(id) {
-    var row = _el('div', { className: 'alkw-message alkw-assistant' });
-    row.setAttribute('data-alkw-id', id);
-    var av  = _el('div', { className: 'alkw-avatar', innerHTML: '🤖' });
-    var bub = _el('div', { className: 'alkw-message-content' });
-    row.appendChild(av); row.appendChild(bub);
-    this.el.messagesArea.appendChild(row);
+    var bub = _el('div', { className: 'alkw-message alkw-assistant' });
+    bub.setAttribute('data-alkw-id', id);
+    this.el.messagesArea.appendChild(bub);
     this._scroll();
     return bub;
   };
@@ -505,6 +503,15 @@
   AlkafeelChatWidget.prototype._scroll = function() {
     var ma = this.el.messagesArea;
     setTimeout(function() { ma.scrollTop = ma.scrollHeight; }, 80);
+  };
+
+  AlkafeelChatWidget.prototype._logoUrl = function() {
+    if (this.config.logo) return this.config.logo;
+    var ep = this.config.apiEndpoint;
+    if (ep.indexOf('http') === 0) {
+      try { return (new URL(ep)).origin + '/logo.png'; } catch(e) {}
+    }
+    return '/logo.png';
   };
 
   AlkafeelChatWidget.prototype._fmt = function(text) {
@@ -522,19 +529,24 @@
   };
 
   AlkafeelChatWidget.prototype._welcomeHTML = function() {
+    var logoUrl = this._logoUrl();
     var btns = [
-      { e:'📚', l:'المشاريع الثقافية',  q:'أعرض لي المشاريع الثقافية' },
-      { e:'🎓', l:'المشاريع التعليمية',  q:'أعرض لي المشاريع التعليمية' },
-      { e:'🕌', l:'مشاريع الصحن',       q:'أعرض لي مشاريع الصحن ومقترباته' },
-      { e:'🏥', l:'المشاريع الطبية',     q:'أعرض لي المشاريع الطبية' },
+      { e:'📚', l:'المشاريع الثقافية',      q:'أعرض لي المشاريع الثقافية' },
+      { e:'🎓', l:'المشاريع التعليمية',      q:'أعرض لي المشاريع التعليمية' },
+      { e:'🕌', l:'مشاريع الصحن ومقترباته', q:'أعرض لي مشاريع الصحن ومقترباته' },
+      { e:'🏥', l:'المشاريع الطبية',         q:'أعرض لي المشاريع الطبية' },
+      { e:'📈', l:'المشاريع التنموية',       q:'أعرض لي المشاريع التنموية' },
+      { e:'🔧', l:'خدمات عامة',              q:'أعرض لي خدمات عامة' },
+      { e:'🏛️', l:'تشكيلات إدارية',         q:'أعرض لي تشكيلات إدارية' },
     ];
     var html = btns.map(function(b) {
       return '<button class="alkw-quick-btn" data-query="' + _esc(b.q) + '">'
            + '<span>' + b.e + '</span><span>' + _esc(b.l) + '</span></button>';
     }).join('');
     return '<div class="alkw-welcome">'
-         + '<h3>\uD83D\uDC4B مرحباً بك!</h3>'
-         + '<p>أنا مساعدك الذكي للاستعلام عن مشاريع العتبة العباسية المقدسة</p>'
+         + '<div class="alkw-welcome-icon"><img src="' + logoUrl + '" alt=""></div>'
+         + '<h3>مرحباً بك ، انا مساعدك الشخصي</h3>'
+         + '<p>اسألني أي سؤال عن مشاريع العتبة العباسية المقدسة وتفاصيلهن بشكل كامل</p>'
          + '<div class="alkw-quick-buttons">' + html + '</div></div>';
   };
 
