@@ -30,12 +30,12 @@
       'position:fixed;bottom:20px;',
       'width:60px;height:60px;border-radius:50%;',
       'background:#04504d;',
-      'color:#fff;border:none;font-size:28px;cursor:pointer;',
-      'box-shadow:0 4px 12px rgba(0,0,0,.3);z-index:999998;',
+      'color:#fff;border:1px solid #397f66;font-size:28px;cursor:pointer;',
+      'box-shadow:0 4px 12px rgba(0,0,0,.3),0 0 8px rgba(212,168,67,.3);z-index:999998;',
       'transition:all .3s cubic-bezier(.4,0,.2,1);',
       'display:flex;align-items:center;justify-content:center;',
       'user-select:none;-webkit-tap-highlight-color:transparent;',
-      'font-family:sans-serif;line-height:1;',
+      'font-family:"Readex Pro",-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif;line-height:1;',
     '}',
     '.alkw-chat-button.alkw-left{left:20px}',
     '.alkw-chat-button.alkw-right{right:20px}',
@@ -105,7 +105,7 @@
     /* ── Messages area ── */
     '.alkw-messages{',
       'flex:1;overflow-y:auto;padding:16px;background:#111827;',
-      'display:flex;flex-direction:column;gap:12px;scroll-behavior:smooth;',
+      'display:flex;flex-direction:column;gap:12px;scroll-behavior:smooth;text-align:center;',
     '}',
     '.alkw-messages::-webkit-scrollbar{width:4px}',
     '.alkw-messages::-webkit-scrollbar-track{background:transparent}',
@@ -113,10 +113,10 @@
 
     /* ── Welcome ── */
     '.alkw-welcome{text-align:center;padding:30px 20px;color:#6b7280;display:block}',
-    '.alkw-welcome-icon{margin-bottom:12px;display:block}',
+    '.alkw-welcome-icon{margin-bottom:12px;display:block;text-align:center}',
     '.alkw-welcome-icon img{width:70px;height:70px;border-radius:50%;object-fit:cover;display:inline-block}',
-    '.alkw-welcome h3{color:#9ca3af;margin:0 0 8px;font-size:16px;font-weight:600;display:block}',
-    '.alkw-welcome p{margin:0 0 16px;font-size:13px;line-height:1.8;color:#6b7280;display:block}',
+    '.alkw-welcome h3{color:#9ca3af;margin:0 0 8px;font-size:16px;font-weight:600;display:block;text-align:center}',
+    '.alkw-welcome p{margin:0 0 16px;font-size:13px;line-height:1.8;color:#6b7280;display:block;text-align:center}',
     '.alkw-quick-buttons{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:16px}',
     '.alkw-quick-btn{',
       'all:initial;background:#1f2937;border:1px solid #374151;padding:7px 14px;',
@@ -165,7 +165,7 @@
     '.alkw-textarea{',
       'all:initial;flex:1;background:#1f2937;border:1px solid #374151;border-radius:12px;',
       'padding:10px 14px;color:#e5e7eb;font-size:14px;font-family:inherit;',
-      'resize:none;max-height:100px;min-height:42px;line-height:1.5;',
+      'resize:none;max-height:100px;line-height:1.5;',
       'transition:border-color .2s;direction:rtl;display:block;',
     '}',
     '.alkw-textarea:focus{outline:none;border-color:#047857}',
@@ -250,6 +250,14 @@
   // ---------- Phase 1: Button only (runs immediately) ----------
 
   AlkafeelChatWidget.prototype._initButton = function() {
+    // Inject Google Fonts (Readex Pro)
+    if (!document.getElementById('alkw-gfont')) {
+      var lk = document.createElement('link');
+      lk.id = 'alkw-gfont';
+      lk.rel = 'stylesheet';
+      lk.href = 'https://fonts.googleapis.com/css2?family=Readex+Pro:wght@200;300;400;500;600;700&display=swap';
+      document.head.appendChild(lk);
+    }
     // Inject button-only CSS (tiny)
     if (!document.getElementById('alkw-btn-css')) {
       var s = document.createElement('style');

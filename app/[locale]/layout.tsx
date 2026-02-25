@@ -20,7 +20,13 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   icons: {
     icon: "/logo.png",
-    apple: "/logo.png"
+    apple: "/logo.png",
+    shortcut: "/logo.png",
+    other: [
+      { rel: "icon", url: "/logo.png", type: "image/png" },
+      { rel: "icon", url: "/logo.png", sizes: "192x192", type: "image/png" },
+      { rel: "icon", url: "/logo.png", sizes: "512x512", type: "image/png" }
+    ]
   }
 }
 
@@ -45,6 +51,9 @@ export default async function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@200;300;400;500;600;700&display=swap"
           rel="stylesheet"
         />
+        <link rel="icon" href="/logo.png" type="image/png" />
+        <link rel="shortcut icon" href="/logo.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/logo.png" />
       </head>
       <body style={{ margin: 0, padding: 0 }}>{children}</body>
     </html>
