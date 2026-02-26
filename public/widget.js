@@ -129,7 +129,7 @@
     /* ── Message bubble (no avatar, align-self) ── */
     '.alkw-message{',
       'max-width:85%;padding:10px 14px;border-radius:12px;font-size:14px;',
-      'line-height:1.7;word-wrap:break-word;overflow-wrap:break-word;',
+      'line-height:2.2;word-wrap:break-word;overflow-wrap:break-word;',
       'animation:alkw-fadeInUp .3s ease;display:block;',
     '}',
     '@keyframes alkw-fadeInUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}',
@@ -140,10 +140,10 @@
     '.alkw-message a{color:#34d399;text-decoration:none;display:inline;cursor:pointer}',
     '.alkw-message a:hover{text-decoration:underline}',
     '.alkw-message strong{font-weight:600;display:inline;color:#fff}',
-    '.alkw-message ol,.alkw-message ul{margin:6px 0;padding-right:20px;display:block}',
-    '.alkw-message li{margin:4px 0;display:list-item;color:#e2e5eb}',
-    '.alkw-message p{margin:4px 0;display:block}',
-    '.alkw-message br{display:block}',
+    '.alkw-message ol,.alkw-message ul{margin:8px 0;padding-right:20px;display:block}',
+    '.alkw-message li{margin:10px 0;display:list-item;color:#e2e5eb}',
+    '.alkw-message p{margin:10px 0;display:block}',
+    '.alkw-message br{display:block;content:"";margin:6px 0}',
 
     /* ── Loading dots ── */
     '.alkw-loading-wrapper{',
@@ -405,8 +405,8 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         messages:   self.messages,
-        temperature: 0.7,
-        max_tokens:  2000,
+        temperature: 0.5,
+        max_tokens:  1200,
         use_tools: true,
       }),
     })
@@ -414,23 +414,20 @@
       self._removeById(loadingId);
 
       if (!response.ok) {
-        return response.json().catch(function() { return {}; }).then(function(d) {
-          self.addMessage('assistant', d.fallback || d.error || '⚠️ عذراً، حدث خطأ. يُرجى المحاولة مرة أخرى.');
+        // حاول قراءة رسالة الخطأ
+        return response.text().then(function(t) {
+          var msg = '⚠️ عذراً، حدث خطأ. يُرجى المحاولة مرة أخرى.';
+          try { var d = JSON.parse(t); msg = d.fallback || d.error || msg; } catch(e) {}
+          self.addMessage('assistant', msg);
         });
       }
 
-      var ct = (response.headers.get('content-type') || '').toLowerCase();
-
-      if (ct.indexOf('application/json') !== -1) {
-        return response.json().then(function(data) {
-          self.addMessage('assistant', data.message || 'عذراً، لم أتمكن من الحصول على رد.');
-        });
-      }
-
+      // ✅ دائماً streaming — الرد يأتي كـ text/plain stream
       if (response.body) {
         return self._readStream(response);
       }
 
+      // fallback: قراءة كنص
       return response.text().then(function(t) {
         self.addMessage('assistant', t || 'لم يتم استلام رد.');
       });

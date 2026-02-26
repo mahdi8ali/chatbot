@@ -28,40 +28,38 @@ import {
  * تنظيف بيانات المشروع لتكون مختصرة ومفيدة لـ GPT
  * يشمل الخصائص المهمة مثل المكان والمواصفات والجهة المنفذة
  */
-function cleanProject(project: any): any {
+/** قص نص طويل مع الحفاظ على المعلومات المهمة */
+function truncate(text: string, max: number): string {
+  if (!text || text.length <= max) return text
+  return text.substring(0, max) + "…"
+}
+
+function cleanProject(project: any, detailed: boolean = false): any {
   if (!project || typeof project !== "object") return project
   
   const sectionNames = Array.isArray(project.sections)
     ? project.sections.map((s: any) => s.name).filter(Boolean)
     : []
 
-  // استخراج الخصائص المهمة (المكان، المواصفات، الجهة المنفذة، تاريخ الافتتاح...)
-  // لا نقطع النصوص — نرسلها كاملة حتى لا تضيع معلومات مهمة مثل عيار الذهب أو الأوزان
+  // استخراج الخصائص المهمة — قص النصوص الطويلة في البحث، كاملة في التفاصيل
+  const maxPropLen = detailed ? 2000 : 300
   const properties: Record<string, string> = {}
   if (Array.isArray(project.properties)) {
     for (const prop of project.properties) {
       const val = prop.pivot?.value || prop.value
       if (prop.name && val && typeof val === "string") {
-        properties[prop.name] = val
+        properties[prop.name] = truncate(val, maxPropLen)
       }
     }
   }
 
-  // استخراج العلامات
-  const tags = Array.isArray(project.kftags)
-    ? project.kftags.map((t: any) => t.title || t.name).filter(Boolean)
-    : []
-
   return {
     id: project.id,
     name: project.name,
-    description: project.description || "",
+    description: truncate(project.description || "", detailed ? 500 : 150),
     sections: sectionNames,
     properties: Object.keys(properties).length > 0 ? properties : undefined,
-    tags: tags.length > 0 ? tags : undefined,
-    url: project.url || (project.id ? `https://projects.alkafeel.net/project/${project.id}` : null),
-    image_url: project.image_url || null,
-    address: project.address || null,
+    url: project.id ? `https://projects.alkafeel.net/project/${project.id}` : null,
   }
 }
 
@@ -73,23 +71,23 @@ function cleanResultForGPT(result: APICallResult): any {
 
   const data = result.data
   
-  // إذا كانت نتائج بحث (results array)
+  // إذا كانت نتائج بحث (results array) — مختصرة
   if (data?.results && Array.isArray(data.results)) {
     return {
       success: true,
       data: {
-        results: data.results.map((p: any) => cleanProject(p)),
+        results: data.results.map((p: any) => cleanProject(p, false)),
         total: data.total,
         query: data.query
       }
     }
   }
 
-  // إذا كان مشروع واحد
+  // إذا كان مشروع واحد — تفاصيل كاملة
   if (data?.id && data?.name) {
     return {
       success: true,
-      data: cleanProject(data)
+      data: cleanProject(data, true)
     }
   }
 
@@ -257,12 +255,80 @@ export async function handleToolCalls(
  * @param tools - الأدوات المتاحة
  * @param maxIterations - الحد الأقصى للتكرار (لمنع حلقات لا نهائية)
  */
+/**
+ * تنفيذ tool calls فقط وإرجاع الرسائل الجاهزة للاستدعاء النهائي (streaming)
+ * 
+ * الفكرة: ننفذ كل tool calls بدون stream، ثم نرجع الرسائل
+ * الجاهزة ليقوم route.ts بالاستدعاء الأخير كـ stream مباشرة للمستخدم
+ */
+export async function resolveToolCalls(
+  openai: OpenAI,
+  model: string,
+  messages: ChatCompletionMessageParam[],
+  tools: OpenAI.Chat.Completions.ChatCompletionTool[],
+  maxIterations: number = 3
+): Promise<{
+  resolvedMessages: ChatCompletionMessageParam[]
+  needsFinalCall: boolean
+  iterations: number
+  directAnswer?: string
+}> {
+  let currentMessages = [...messages]
+  let iterations = 0
+
+  while (iterations < maxIterations) {
+    iterations++
+    console.log(`[Tool Resolution] Iteration ${iterations}`)
+
+    const response = await openai.chat.completions.create({
+      model,
+      messages: currentMessages,
+      tools,
+      tool_choice: "auto",
+      temperature: 0.5,
+      max_tokens: 1200
+    })
+
+    const assistantMessage = response.choices[0].message
+    currentMessages.push(assistantMessage)
+
+    // إذا لم يستدعِ أدوات → رد مباشر (سؤال بسيط مثل "مرحبا")
+    if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
+      return {
+        resolvedMessages: currentMessages,
+        needsFinalCall: false,
+        iterations,
+        directAnswer: assistantMessage.content || ""
+      }
+    }
+
+    // معالجة tool calls
+    console.log(`[Tool Resolution] Processing ${assistantMessage.tool_calls.length} tool call(s)`)
+    const toolResponses = await handleToolCalls(assistantMessage.tool_calls)
+    currentMessages.push(...toolResponses)
+
+    // ✅ بعد كل tool call → نتوقف ونرجع needsFinalCall
+    // نخلي route.ts يقرر: إذا GPT يحتاج أدوات ثانية، يرجع يستدعي resolveToolCalls
+    // أو يعمل streaming مباشرة للرد النهائي
+  }
+
+  // وصلنا هنا = tool calls تمت معالجتها → نحتاج streaming call
+  return {
+    resolvedMessages: currentMessages,
+    needsFinalCall: true,
+    iterations
+  }
+}
+
+/**
+ * [Legacy] تدفق كامل بدون streaming — يُستخدم كـ fallback
+ */
 export async function executeFunctionCallingFlow(
   openai: OpenAI,
   model: string,
   messages: ChatCompletionMessageParam[],
   tools: OpenAI.Chat.Completions.ChatCompletionTool[],
-  maxIterations: number = 5
+  maxIterations: number = 3
 ): Promise<{
   finalMessage: string
   allMessages: ChatCompletionMessageParam[]
@@ -274,46 +340,29 @@ export async function executeFunctionCallingFlow(
 
   while (iterations < maxIterations) {
     iterations++
-    console.log(`[Function Calling Flow] Iteration ${iterations}`)
 
-    // استدعاء OpenAI مع الأدوات
     const response = await openai.chat.completions.create({
       model,
       messages: currentMessages,
       tools,
-      tool_choice: "auto", // دع النموذج يقرر
-      temperature: 0.7,
-      max_tokens: 2000
+      tool_choice: "auto",
+      temperature: 0.5,
+      max_tokens: 1200
     })
 
     const assistantMessage = response.choices[0].message
-
-    // إضافة رد المساعد للمحادثة
     currentMessages.push(assistantMessage)
 
-    // إذا لم يكن هناك tool calls، انتهينا
     if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
       finalResponse = assistantMessage.content || ""
       break
     }
 
-    // معالجة tool calls
-    console.log(
-      `[Function Calling Flow] Processing ${assistantMessage.tool_calls.length} tool call(s)`
-    )
-
     const toolResponses = await handleToolCalls(assistantMessage.tool_calls)
-
-    // إضافة نتائج الأدوات للمحادثة
     currentMessages.push(...toolResponses)
-
-    // في التكرار التالي، سنعيد إرسال كل شيء لـ OpenAI
-    // وسيستخدم نتائج الأدوات لصياغة رد نهائي
   }
 
-  // إذا وصلنا للحد الأقصى بدون رد نهائي
   if (!finalResponse && iterations >= maxIterations) {
-    console.warn(`[Function Calling Flow] Max iterations reached`)
     finalResponse = getFallbackResponse("api_error")
   }
 

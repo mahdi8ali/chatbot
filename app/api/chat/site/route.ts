@@ -4,7 +4,7 @@ import {
 } from "@/lib/server/system-prompts"
 import { getOpenAIModel } from "@/lib/server/site-api-config"
 import { ALL_SITE_TOOLS } from "@/lib/server/site-tools-definitions"
-import { executeFunctionCallingFlow } from "@/lib/server/function-calling-handler"
+import { resolveToolCalls } from "@/lib/server/function-calling-handler"
 import {
   applyRateLimit,
   createRateLimitResponse
@@ -100,8 +100,8 @@ export async function POST(request: Request) {
     const json = await request.json()
     const {
       messages,
-      temperature = 0.7,
-      max_tokens = 2000,
+      temperature = 0.5,
+      max_tokens = 1200,
       use_tools = true
     } = json as ChatRequest
 
@@ -177,63 +177,97 @@ export async function POST(request: Request) {
       }))
     ]
 
-    // إذا كانت الأدوات مفعّلة، استخدم Function Calling
+    // ===== Streaming Function Calling =====
     if (use_tools) {
-      console.log(`[Chat API] Using Function Calling with Tools (${sanitizedMessages.length} messages in conversation)`)
+      console.log(`[Chat API] Streaming FC (${sanitizedMessages.length} msgs)`)
 
       try {
-        // تنفيذ تدفق Function Calling الكامل
-        const result = await executeFunctionCallingFlow(
+        // الخطوة 1: حل جميع tool calls (بدون stream)
+        const toolResult = await resolveToolCalls(
           openai,
           model,
           messagesWithSystem,
           ALL_SITE_TOOLS,
-          5 // max iterations
+          3
         )
 
-        console.log(
-          `[Chat API] Function Calling completed in ${result.iterations} iteration(s)`
-        )
+        console.log(`[Chat API] Tools resolved in ${toolResult.iterations} iteration(s), needsFinalCall: ${toolResult.needsFinalCall}`)
 
-        // إرجاع الرد النهائي مباشرة (بدون streaming هنا للبساطة)
-        return new Response(
-          JSON.stringify({
-            message: result.finalMessage,
-            iterations: result.iterations,
-            mode: "function_calling"
-          }),
-          {
-            status: 200,
+        // إذا GPT أجاب مباشرة بدون أدوات → stream حرف حرف
+        if (!toolResult.needsFinalCall && toolResult.directAnswer) {
+          const encoder = new TextEncoder()
+          const text = toolResult.directAnswer!
+          const directStream = new ReadableStream({
+            async start(controller) {
+              // إرسال النص بقطع صغيرة (~1-3 أحرف) لمحاكاة streaming طبيعي
+              let i = 0
+              while (i < text.length) {
+                const chunkSize = 1 + Math.floor(Math.random() * 3) // 1-3 أحرف
+                const chunk = text.slice(i, i + chunkSize)
+                controller.enqueue(encoder.encode(chunk))
+                i += chunkSize
+                await new Promise(r => setTimeout(r, 35))
+              }
+              controller.close()
+            }
+          })
+          return new Response(directStream, {
             headers: {
-              "Content-Type": "application/json",
+              "Content-Type": "text/plain; charset=utf-8",
               ...securityHeaders
             }
+          })
+        }
+
+        // الخطوة 2: الاستدعاء الأخير كـ stream
+        const finalStream = await openai.chat.completions.create({
+          model,
+          messages: toolResult.resolvedMessages,
+          temperature: 0.5,
+          max_tokens: 1200,
+          stream: true
+        })
+
+        const stream = new ReadableStream({
+          async start(controller) {
+            try {
+              for await (const chunk of finalStream) {
+                const content = chunk.choices[0]?.delta?.content || ""
+                if (content) {
+                  controller.enqueue(new TextEncoder().encode(content))
+                }
+              }
+              controller.close()
+            } catch (error) {
+              controller.error(error)
+            }
           }
-        )
+        })
+
+        return new Response(stream, {
+          headers: {
+            "Content-Type": "text/plain; charset=utf-8",
+            ...securityHeaders
+          }
+        })
       } catch (fcError: any) {
-        console.error("[Chat API] Function Calling Error:", fcError)
-        // Fallback: استخدام الطريقة العادية
+        console.error("[Chat API] Streaming FC Error:", fcError)
         console.log("[Chat API] Falling back to standard mode")
       }
     }
 
-    // الطريقة العادية (بدون أدوات) - كما في المرحلة 1
-    console.log("[Chat API] Using standard mode (no tools)")
+    // ===== Fallback: بدون أدوات =====
+    console.log("[Chat API] Standard mode (no tools)")
 
     const response = await openai.chat.completions.create({
-      model: model,
+      model,
       messages: messagesWithSystem,
-      temperature: temperature,
-      max_tokens: max_tokens,
-      stream: true,
-
-      // إعدادات إضافية لضمان الالتزام بالـ System Prompt
-      presence_penalty: 0.6,
-      frequency_penalty: 0.3
+      temperature,
+      max_tokens,
+      stream: true
     })
 
-    // تحويل الـ stream من OpenAI إلى ReadableStream
-    const stream = new ReadableStream({
+    const fallbackStream = new ReadableStream({
       async start(controller) {
         try {
           for await (const chunk of response) {
@@ -249,7 +283,7 @@ export async function POST(request: Request) {
       }
     })
 
-    return new Response(stream, {
+    return new Response(fallbackStream, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
         ...securityHeaders

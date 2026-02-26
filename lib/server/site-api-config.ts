@@ -16,7 +16,7 @@ export interface SiteAPIConfig {
 export function getSiteAPIConfig(): SiteAPIConfig {
   const baseUrl = process.env.SITE_API_BASE_URL
   const token = process.env.SITE_API_TOKEN || null
-  const openaiModel = process.env.OPENAI_MODEL || "gpt-4o"
+  const openaiModel = process.env.OPENAI_MODEL || "gpt-4o-mini"
 
   if (!baseUrl) {
     throw new Error(
@@ -36,7 +36,7 @@ export function getSiteAPIConfig(): SiteAPIConfig {
  * Falls back to gpt-4o if not set
  */
 export function getOpenAIModel(): string {
-  return process.env.OPENAI_MODEL || "gpt-4o"
+  return process.env.OPENAI_MODEL || "gpt-4o-mini"
 }
 
 /**

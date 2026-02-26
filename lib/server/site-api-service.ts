@@ -225,7 +225,7 @@ async function callSiteAPI(
  */
 let projectsCache: any[] | null = null
 let projectsCacheTime: number = 0
-const CACHE_DURATION = 5 * 60 * 1000 // 5 دقائق
+const CACHE_DURATION = 30 * 60 * 1000 // 30 دقيقة — تقليل استدعاءات API
 
 async function getAllProjects(): Promise<APICallResult> {
   console.log("[getAllProjects] Starting...")
@@ -268,7 +268,7 @@ async function getAllProjects(): Promise<APICallResult> {
 export async function siteSearch(
   query?: string,
   section?: string,
-  limit: number = 10
+  limit: number = 5
 ): Promise<APICallResult> {
   const allProjects = await getAllProjects()
   
@@ -496,7 +496,7 @@ export async function siteListCategories(
  * @param category - فئة اختيارية
  */
 export async function siteGetLatest(
-  limit: number = 10,
+  limit: number = 5,
   section?: string
 ): Promise<APICallResult> {
   const allProjects = await getAllProjects()
