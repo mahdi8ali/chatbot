@@ -193,36 +193,15 @@ export async function POST(request: Request) {
 
         console.log(`[Chat API] Tools resolved in ${toolResult.iterations} iteration(s), needsFinalCall: ${toolResult.needsFinalCall}`)
 
-        // إذا GPT أجاب مباشرة بدون أدوات → stream حرف حرف
-        if (!toolResult.needsFinalCall && toolResult.directAnswer) {
-          const encoder = new TextEncoder()
-          const text = toolResult.directAnswer!
-          const directStream = new ReadableStream({
-            async start(controller) {
-              // إرسال النص بقطع صغيرة (~1-3 أحرف) لمحاكاة streaming طبيعي
-              let i = 0
-              while (i < text.length) {
-                const chunkSize = 1 + Math.floor(Math.random() * 3) // 1-3 أحرف
-                const chunk = text.slice(i, i + chunkSize)
-                controller.enqueue(encoder.encode(chunk))
-                i += chunkSize
-                await new Promise(r => setTimeout(r, 35))
-              }
-              controller.close()
-            }
-          })
-          return new Response(directStream, {
-            headers: {
-              "Content-Type": "text/plain; charset=utf-8",
-              ...securityHeaders
-            }
-          })
-        }
+        // ✅ الخطوة 2: streaming حقيقي من OpenAI (يشتغل على Vercel)
+        // سواء كان رد مباشر أو بعد tool calls — دائماً نستخدم stream حقيقي
+        const streamMessages = toolResult.needsFinalCall
+          ? toolResult.resolvedMessages  // بعد tool calls
+          : messagesWithSystem           // سؤال بسيط بدون أدوات
 
-        // الخطوة 2: الاستدعاء الأخير كـ stream
         const finalStream = await openai.chat.completions.create({
           model,
-          messages: toolResult.resolvedMessages,
+          messages: streamMessages,
           temperature: 0.5,
           max_tokens: 1200,
           stream: true

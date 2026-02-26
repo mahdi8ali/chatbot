@@ -275,6 +275,7 @@ export async function resolveToolCalls(
 }> {
   let currentMessages = [...messages]
   let iterations = 0
+  let toolsWereCalled = false
 
   while (iterations < maxIterations) {
     iterations++
@@ -292,8 +293,20 @@ export async function resolveToolCalls(
     const assistantMessage = response.choices[0].message
     currentMessages.push(assistantMessage)
 
-    // إذا لم يستدعِ أدوات → رد مباشر (سؤال بسيط مثل "مرحبا")
+    // إذا لم يستدعِ أدوات
     if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
+      if (toolsWereCalled) {
+        // ✅ أدوات استُدعيت سابقاً → حذف الرد غير المتدفق
+        // route.ts سيعمل streaming حقيقي من OpenAI
+        currentMessages.pop()
+        console.log(`[Tool Resolution] Tools done, popped answer for streaming`)
+        return {
+          resolvedMessages: currentMessages,
+          needsFinalCall: true,
+          iterations
+        }
+      }
+      // سؤال بسيط بدون أدوات → نرجعه كـ directAnswer
       return {
         resolvedMessages: currentMessages,
         needsFinalCall: false,
@@ -303,13 +316,10 @@ export async function resolveToolCalls(
     }
 
     // معالجة tool calls
+    toolsWereCalled = true
     console.log(`[Tool Resolution] Processing ${assistantMessage.tool_calls.length} tool call(s)`)
     const toolResponses = await handleToolCalls(assistantMessage.tool_calls)
     currentMessages.push(...toolResponses)
-
-    // ✅ بعد كل tool call → نتوقف ونرجع needsFinalCall
-    // نخلي route.ts يقرر: إذا GPT يحتاج أدوات ثانية، يرجع يستدعي resolveToolCalls
-    // أو يعمل streaming مباشرة للرد النهائي
   }
 
   // وصلنا هنا = tool calls تمت معالجتها → نحتاج streaming call
