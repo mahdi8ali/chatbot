@@ -14,17 +14,16 @@ import {
   sanitizeMessages,
   logSecurityIssue
 } from "@/lib/server/data-sanitizer"
-import { ServerRuntime } from "next"
 import OpenAI from "openai"
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions.mjs"
 
-export const runtime: ServerRuntime = "edge"
+export const runtime = "nodejs"
 
 /**
  * CORS Headers - السماح فقط من دومين محدد
  */
 const ALLOWED_ORIGINS = [
-  process.env.SITE_DOMAIN || "https://projects.alkafeel.net",
+  process.env.SITE_DOMAIN || "https://alkafeel.net",
   "http://localhost:3000", // للتطوير
   "http://localhost:3001", // للتطوير (بديل)
   "null" // للـ file:// protocol (HTML files)

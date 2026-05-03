@@ -2,21 +2,21 @@
  * تعريف الأدوات (Tools) للـ Function Calling
  * 
  * هذه الأدوات تُستخدم من قبل OpenAI لاختيار الـ endpoint المناسب
- * جميع الأدوات مرتبطة بـ REST API الخاص بموقع projects.alkafeel.net
+ * جميع الأدوات مرتبطة بقاعدة بيانات أخبار شبكة الكفيل
  */
 
 import { ChatCompletionTool } from "openai/resources/chat/completions"
 
 /**
- * أداة البحث في المشاريع
+ * أداة البحث في الأخبار
  * 
- * الاستخدام: عندما يطلب المستخدم البحث عن مشاريع أو فلترتها
+ * الاستخدام: عندما يطلب المستخدم البحث عن أخبار أو فلترتها
  */
 export const TOOL_SEARCH_PROJECTS: ChatCompletionTool = {
   type: "function",
   function: {
     name: "search_projects",
-    description: "بحث في مشاريع الموقع بالاسم والوصف والمواصفات والعلامات. النتائج مرتبة بالتطابق.",
+    description: "بحث في أخبار شبكة الكفيل بالعنوان والمحتوى والعنوان الفرعي. النتائج مرتبة بالتطابق.",
     parameters: {
       type: "object",
       properties: {
@@ -41,15 +41,15 @@ export const TOOL_SEARCH_PROJECTS: ChatCompletionTool = {
 }
 
 /**
- * أداة الحصول على تفاصيل مشروع محدد
+ * أداة الحصول على تفاصيل خبر محدد
  * 
- * الاستخدام: عندما يطلب المستخدم معلومات عن مشروع برقم أو اسم محدد
+ * الاستخدام: عندما يطلب المستخدم معلومات عن خبر برقم محدد
  */
 export const TOOL_GET_PROJECT_BY_ID: ChatCompletionTool = {
   type: "function",
   function: {
     name: "get_project_by_id",
-    description: "تفاصيل كاملة عن مشروع محدد بالـ ID. استخدمها للأسئلة التقنية الدقيقة.",
+    description: "تفاصيل كاملة عن خبر محدد بالـ ID.",
     parameters: {
       type: "object",
       properties: {
@@ -64,15 +64,15 @@ export const TOOL_GET_PROJECT_BY_ID: ChatCompletionTool = {
 }
 
 /**
- * أداة الحصول على قائمة الفئات المتاحة
+ * أداة الحصول على قائمة التصنيفات المتاحة
  * 
- * الاستخدام: عندما يسأل المستخدم عن أنواع المشاريع المتوفرة
+ * الاستخدام: عندما يسأل المستخدم عن أنواع/تصنيفات الأخبار المتوفرة
  */
 export const TOOL_FILTER_PROJECTS: ChatCompletionTool = {
   type: "function",
   function: {
     name: "filter_projects",
-    description: "قائمة الأقسام والتصنيفات المتاحة مع عدد المشاريع.",
+    description: "قائمة التصنيفات المتاحة مع عدد الأخبار.",
     parameters: {
       type: "object",
       properties: {
@@ -87,15 +87,15 @@ export const TOOL_FILTER_PROJECTS: ChatCompletionTool = {
 }
 
 /**
- * أداة الحصول على أحدث المشاريع
+ * أداة الحصول على أحدث الأخبار
  * 
- * الاستخدام: عندما يطلب المستخدم آخر المشاريع أو الأحدث
+ * الاستخدام: عندما يطلب المستخدم آخر الأخبار أو الأحدث
  */
 export const TOOL_GET_LATEST_PROJECTS: ChatCompletionTool = {
   type: "function",
   function: {
     name: "get_latest_projects",
-    description: "أحدث المشاريع المضافة للموقع.",
+    description: "أحدث الأخبار المنشورة في شبكة الكفيل.",
     parameters: {
       type: "object",
       properties: {
@@ -116,7 +116,7 @@ export const TOOL_GET_LATEST_PROJECTS: ChatCompletionTool = {
 }
 
 /**
- * أداة الحصول على إحصائيات المشاريع
+ * أداة الحصول على إحصائيات الأخبار
  * 
  * الاستخدام: عندما يسأل المستخدم عن الإحصائيات أو الأرقام
  */
@@ -124,7 +124,7 @@ export const TOOL_GET_STATISTICS: ChatCompletionTool = {
   type: "function",
   function: {
     name: "get_statistics",
-    description: "إحصائيات عامة: عدد المشاريع، الأقسام الأكثر مشاريع.",
+    description: "إحصائيات عامة: عدد الأخبار، التصنيفات الأكثر محتوى.",
     parameters: {
       type: "object",
       properties: {},

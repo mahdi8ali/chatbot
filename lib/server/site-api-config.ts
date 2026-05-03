@@ -1,47 +1,59 @@
 /**
- * Site API Configuration
+ * Database Configuration
  * Server-side only - never expose to client
  */
 
-export interface SiteAPIConfig {
-  baseUrl: string
-  token: string | null
+export interface DatabaseConfig {
+  host: string
+  port: number
+  user: string
+  password: string
+  database: string
+  connectionLimit: number
   openaiModel: string
 }
 
 /**
- * Get Site API configuration from environment variables
+ * Get Database configuration from environment variables
  * This function should only be called on the server-side
  */
-export function getSiteAPIConfig(): SiteAPIConfig {
-  const baseUrl = process.env.SITE_API_BASE_URL
-  const token = process.env.SITE_API_TOKEN || null
+export function getDatabaseConfig(): DatabaseConfig {
+  const host = process.env.DB_HOST || "127.0.0.1"
+  const port = Number(process.env.DB_PORT || "3306")
+  const user = process.env.DB_USER || "root"
+  const password = process.env.DB_PASSWORD || ""
+  const database = process.env.DB_NAME || "db"
+  const connectionLimit = Number(process.env.DB_CONNECTION_LIMIT || "10")
   const openaiModel = process.env.OPENAI_MODEL || "gpt-4o-mini"
 
-  if (!baseUrl) {
+  if (!database) {
     throw new Error(
-      "SITE_API_BASE_URL is not configured. Please set it in your .env.local file."
+      "DB_NAME is not configured. Please set it in your .env.local file."
     )
   }
 
   return {
-    baseUrl,
-    token,
+    host,
+    port,
+    user,
+    password,
+    database,
+    connectionLimit,
     openaiModel
   }
 }
 
 /**
  * Get OpenAI model from environment variable
- * Falls back to gpt-4o if not set
+ * Falls back to gpt-4o-mini if not set
  */
 export function getOpenAIModel(): string {
   return process.env.OPENAI_MODEL || "gpt-4o-mini"
 }
 
 /**
- * Check if Site API is properly configured
+ * Check if database is properly configured
  */
 export function isSiteAPIConfigured(): boolean {
-  return Boolean(process.env.SITE_API_BASE_URL)
+  return Boolean(process.env.DB_NAME || "db")
 }

@@ -59,7 +59,7 @@ function cleanProject(project: any, detailed: boolean = false): any {
     description: truncate(project.description || "", detailed ? 500 : 150),
     sections: sectionNames,
     properties: Object.keys(properties).length > 0 ? properties : undefined,
-    url: project.id ? `https://projects.alkafeel.net/project/${project.id}` : null,
+    url: project.id ? `https://alkafeel.net/news/index.php?id=${project.id}` : null,
   }
 }
 
