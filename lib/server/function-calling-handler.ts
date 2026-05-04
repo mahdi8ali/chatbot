@@ -41,11 +41,13 @@ function cleanProject(project: any, detailed: boolean = false): any {
     ? project.sections.map((s: any) => s.name).filter(Boolean)
     : []
 
-  // استخراج الخصائص المهمة — قص النصوص الطويلة في البحث، كاملة في التفاصيل
+  // استخراج الخصائص المفيدة فقط — حذف عدد المشاهدات ورابط الصورة لتقليل tokens
+  const SKIP_PROPS = new Set(["عدد المشاهدات", "الصورة"])
   const maxPropLen = detailed ? 2000 : 300
   const properties: Record<string, string> = {}
   if (Array.isArray(project.properties)) {
     for (const prop of project.properties) {
+      if (!detailed && SKIP_PROPS.has(prop.name)) continue
       const val = prop.pivot?.value || prop.value
       if (prop.name && val && typeof val === "string") {
         properties[prop.name] = truncate(val, maxPropLen)
@@ -56,7 +58,7 @@ function cleanProject(project: any, detailed: boolean = false): any {
   return {
     id: project.id,
     name: project.name,
-    description: truncate(project.description || "", detailed ? 500 : 150),
+    description: truncate(project.description || "", detailed ? 800 : 600),
     sections: sectionNames,
     properties: Object.keys(properties).length > 0 ? properties : undefined,
     url: project.id ? `https://alkafeel.net/news/index.php?id=${project.id}` : null,
@@ -281,14 +283,16 @@ export async function resolveToolCalls(
     iterations++
     console.log(`[Tool Resolution] Iteration ${iterations}`)
 
+    const tCall = Date.now()
     const response = await openai.chat.completions.create({
       model,
       messages: currentMessages,
       tools,
       tool_choice: "auto",
       temperature: 0.5,
-      max_tokens: 1200
+      max_tokens: 200  // اختيار الأداة فقط — لا يحتاج أكثر
     })
+    console.log(`[Timing] OpenAI call ${iterations}: ${Date.now() - tCall}ms`)
 
     const assistantMessage = response.choices[0].message
     currentMessages.push(assistantMessage)

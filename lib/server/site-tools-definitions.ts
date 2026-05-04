@@ -30,7 +30,7 @@ export const TOOL_SEARCH_PROJECTS: ChatCompletionTool = {
         },
         limit: {
           type: "number",
-          description: "عدد النتائج (افتراضي: 5، أقصى: 20)",
+          description: "عدد النتائج (افتراضي: 2، أقصى: 20)",
           minimum: 1,
           maximum: 20
         }
@@ -101,7 +101,7 @@ export const TOOL_GET_LATEST_PROJECTS: ChatCompletionTool = {
       properties: {
         limit: {
           type: "number",
-          description: "عدد المشاريع (افتراضي: 5، أقصى: 20)",
+          description: "عدد المشاريع (افتراضي: 2، أقصى: 20)",
           minimum: 1,
           maximum: 20
         },

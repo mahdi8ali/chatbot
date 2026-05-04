@@ -17,7 +17,72 @@ import {
 import OpenAI from "openai"
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions.mjs"
 
-export const runtime = "nodejs"
+/**
+ * استخراج IDs المقالات التي أرجعتها الأدوات فعلاً
+ * يُستخدم للتحقق من أن الروابط في رد البوت مصدرها نتائج حقيقية
+ */
+function extractValidArticleIds(messages: ChatCompletionMessageParam[]): Set<string> {
+  const ids = new Set<string>()
+  for (const msg of messages) {
+    if (msg.role !== "tool") continue
+    const content = typeof msg.content === "string" ? msg.content : ""
+    if (!content) continue
+    try {
+      const parsed = JSON.parse(content)
+      const results: any[] = parsed?.data?.results || []
+      const single = parsed?.data
+      const items = results.length > 0 ? results : (single?.id ? [single] : [])
+      for (const item of items) {
+        if (item?.id) ids.add(String(item.id))
+        const urlMatch = String(item?.url || "").match(/id=(\d+)/)
+        if (urlMatch) ids.add(urlMatch[1])
+      }
+    } catch {}
+  }
+  return ids
+}
+
+/**
+ * استخراج id من أي صيغة رابط alkafeel.net/news
+ * يغطي: index.php?id=X  /  index?id=X  /  ?id=X&lang=...  /  /X (numeric path)
+ */
+function extractNewsId(url: string): string | null {
+  const m = url.match(/[?&]id=(\d+)/) || url.match(/\/news\/(\d+)/)
+  return m ? m[1] : null
+}
+
+/**
+ * حذف أي رابط alkafeel.net/news في الرد لم يكن ضمن IDs نتائج الأدوات
+ */
+function stripInvalidLinks(text: string, validIds: Set<string>): string {
+  // إذا لم تُستدعى أي أداة (validIds فارغة) → احذف كل روابط alkafeel.net/news
+  // لأن البوت قد يخترع روابط من ذاكرته دون أن يبحث فعلاً
+  const hasValidIds = validIds.size > 0
+
+  // حذف markdown links التي تحتوي على alkafeel.net/news
+  text = text.replace(
+    /\[([^\]]*)\]\((https:\/\/(?:www\.)?alkafeel\.net\/news[^\s)]*)\)/g,
+    (match, label, url) => {
+      if (!hasValidIds) return label   // لا توجد نتائج أدوات → احذف الرابط كلياً
+      const id = extractNewsId(url)
+      return (!id || validIds.has(id)) ? match : label
+    }
+  )
+
+  // حذف روابط خام تحتوي على alkafeel.net/news
+  text = text.replace(
+    /https:\/\/(?:www\.)?alkafeel\.net\/news\S*/g,
+    (url) => {
+      if (!hasValidIds) return ""      // لا توجد نتائج أدوات → احذف الرابط
+      const id = extractNewsId(url)
+      return (!id || validIds.has(id)) ? url : ""
+    }
+  )
+
+  // حذف 🔗 اليتيمة إذا حُذف الرابط بعدها
+  return text.replace(/🔗\s*(?:\[اقرأ المزيد\])?\s*\n?\s*$/gm, "").trim()
+}
+
 
 /**
  * CORS Headers - السماح فقط من دومين محدد
@@ -202,27 +267,29 @@ export async function POST(request: Request) {
           model,
           messages: streamMessages,
           temperature: 0.5,
-          max_tokens: 1200,
+          max_tokens: 500,
           stream: true
         })
 
-        const stream = new ReadableStream({
-          async start(controller) {
-            try {
-              for await (const chunk of finalStream) {
-                const content = chunk.choices[0]?.delta?.content || ""
-                if (content) {
-                  controller.enqueue(new TextEncoder().encode(content))
-                }
-              }
-              controller.close()
-            } catch (error) {
-              controller.error(error)
+        // بافر الرد كاملاً ثم تحقق من الروابط قبل الإرسال
+        let fullResponse = ""
+        for await (const chunk of finalStream) {
+          fullResponse += chunk.choices[0]?.delta?.content || ""
+        }
+
+        // استخرج IDs التي أرجعتها الأدوات فعلاً واحذف أي رابط خارجها
+        if (toolResult.needsFinalCall) {
+          const validIds = extractValidArticleIds(streamMessages)
+          if (validIds.size > 0) {
+            const before = fullResponse
+            fullResponse = stripInvalidLinks(fullResponse, validIds)
+            if (fullResponse !== before) {
+              console.log(`[Link Validator] Stripped invalid link(s). Valid IDs: [${[...validIds].join(",")}]`)
             }
           }
-        })
+        }
 
-        return new Response(stream, {
+        return new Response(fullResponse, {
           headers: {
             "Content-Type": "text/plain; charset=utf-8",
             ...securityHeaders

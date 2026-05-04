@@ -55,9 +55,10 @@ function getNewsUrl(id: number): string {
 }
 
 function stripHtml(input: string): string {
+  if (!input) return ""
+  // سريع: حذف tags فقط بدون lookahead ثقيل
+  // الأمان من XSS يعالجه data-sanitizer على مدخلات المستخدم وليس بيانات DB
   return input
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim()
@@ -70,13 +71,73 @@ function excerpt(text: string | null | undefined, max: number = 280): string {
   return clean.slice(0, max) + "..."
 }
 
+/**
+ * تطبيع الكلمة العربية بحذف اللواحق الشائعة للمطابقة الجذرية
+ * مثال: "ترفيهية" → "ترفيه" ، "ترفيهي" → "ترفيه"
+ */
+function normalizeArabicWord(word: string): string {
+  return word
+    .replace(/[ًٌٍَُِّْ]/g, "")   // حذف التشكيل
+    .replace(/(ة|ي|ا|ون|ين|ات|ان|اً|ية|يّ)$/, "")
+    .replace(/^(ال|وال|فال|بال|كال)/, "")
+}
+
+/**
+ * استخراج هيكل الحروف الصامتة (Consonant Skeleton)
+ * يحذف حروف المد الداخلية ا/و/ي لتوحيد الجموع التكسيرية مع مفرداتها
+ * مثال: "مشاريع" → "مشرع"، "مشروع" → "مشرع" (نفس الهيكل)
+ */
+function consonantSkeleton(word: string): string {
+  if (word.length < 4) return word
+  const first = word[0]
+  const last = word[word.length - 1]
+  const middle = word.slice(1, -1).replace(/[اوي]/g, "")
+  const result = first + middle + last
+  return result.length >= 3 ? result : word
+}
+
+
 function mapNewsToItem(row: NewsRow) {
   const categoryName = row.category_id ? `تصنيف ${row.category_id}` : "أخبار شبكة الكفيل"
+  const strippedContent = stripHtml(row.content || "")
+  const description = strippedContent.length <= 320 ? strippedContent : strippedContent.slice(0, 320) + "..."
+
+  // بناء searchText مع جذور الكلمات لتغطية التصريفات المختلفة
+  const rawText = [
+    row.title,
+    row.title_2,
+    description,
+    strippedContent.slice(0, 250),
+    row.photo_comment,
+    categoryName
+  ]
+    .filter(Boolean)
+    .join(" ")
+
+  const searchText = rawText.toLowerCase()
+
+  // إضافة جذور كلمات العنوان لتحسين المطابقة الجذرية
+  const titleRoots = (row.title || "")
+    .split(/\s+/)
+    .map(normalizeArabicWord)
+    .filter(w => w.length >= 3)
+    .join(" ")
+
+  // هيكل الحروف الصامتة لكلمات العنوان — يوحّد الجموع التكسيرية مع مفرداتها
+  // مثال: "مشاريع" و"مشروع" كلاهما → "مشرع"
+  const titleSkeletons = (row.title || "")
+    .split(/\s+/)
+    .map(w => consonantSkeleton(normalizeArabicWord(w)))
+    .filter(w => w.length >= 3)
+    .join(" ")
+
+  const titleSkeletonText = titleSkeletons.toLowerCase()
+  const searchTextWithRoots = searchText + " " + titleRoots.toLowerCase() + " " + titleSkeletonText
 
   return {
     id: row.id,
     name: row.title,
-    description: excerpt(row.content, 320),
+    description,
     sections: [{ name: categoryName }],
     properties: [
       row.title_2
@@ -94,7 +155,10 @@ function mapNewsToItem(row: NewsRow) {
         : null
     ].filter(Boolean),
     url: getNewsUrl(row.id),
-    raw_content: row.content || ""
+    searchText: searchTextWithRoots,   // يشمل النص الكامل + جذور كلمات العنوان + هياكل العنوان
+    titleSkeletonText,                  // هياكل كلمات العنوان منفردة للمطابقة بمستوى العنوان
+    created_at: row.created_at || null,
+    created_at_ts: row.created_at ? new Date(row.created_at).getTime() : 0
   }
 }
 
@@ -110,19 +174,24 @@ async function getAllNews(): Promise<APICallResult> {
 
   try {
     const db = getPool()
+    const t0 = Date.now()
     const [rows] = await db.query<NewsRow[]>(
       `SELECT id, title, title_2, image, content, views, photo_comment, active, category_id, created_at, updated_at
        FROM news
        WHERE active = 1 AND deleted_at IS NULL`
     )
+    console.log(`[Timing] DB query: ${Date.now() - t0}ms (${rows.length} rows)`)
 
+    const t1 = Date.now()
     const mapped = rows.map(mapNewsToItem)
-    const sanitized = sanitizeAPIResponse(mapped)
+    console.log(`[Timing] mapNewsToItem: ${Date.now() - t1}ms`)
 
-    newsCache = sanitized
+    // بيانات الأخبار لا تحتوي حقولاً حساسة (passwords/tokens)
+    // sanitizeAPIResponse مخصصة لمدخلات المستخدم وليس بيانات DB
+    newsCache = mapped
     newsCacheTime = now
 
-    return { success: true, data: sanitized }
+    return { success: true, data: mapped }
   } catch (error: any) {
     console.error("[DB Error - getAllNews]:", error?.message || error)
     return {
@@ -135,36 +204,57 @@ async function getAllNews(): Promise<APICallResult> {
 export async function siteSearch(
   query?: string,
   section?: string,
-  limit: number = 5
+  limit: number = 2
 ): Promise<APICallResult> {
+  const t0 = Date.now()
   const allNews = await getAllNews()
   if (!allNews.success) return allNews
+  console.log(`[Timing] getAllNews (cached or fresh): ${Date.now() - t0}ms`)
 
   const data = (allNews.data as any[]) || []
   const safeQuery = (query || "").trim().toLowerCase()
   const words = safeQuery.split(/\s+/).filter(Boolean)
+  // جذور الكلمات محفوظة بنفس الترتيب والفهرس — null للكلمات القصيرة
+  const wordRoots = words.map(w => {
+    const r = normalizeArabicWord(w)
+    return r.length >= 3 ? r : null
+  })
+  // هيكل الحروف الصامتة بنفس الفهرس
+  const wordSkeletons = wordRoots.map(r => (r ? consonantSkeleton(r) : null))
+  const sectionLower = section ? section.toLowerCase() : null
 
+  const t1 = Date.now()
   const scored = data
     .map(item => {
-      const text = [
-        item.name,
-        item.description,
-        item.raw_content,
-        ...(item.properties || []).map((p: any) => `${p.name} ${p.value}`),
-        ...(item.sections || []).map((s: any) => s.name)
-      ]
-        .join(" ")
-        .toLowerCase()
+      const text: string = item.searchText || ""
+      const titleLower: string = (item.name || "").toLowerCase()
+      const titleSkeleton: string = item.titleSkeletonText || ""
 
       let score = 0
-      if (safeQuery && text.includes(safeQuery)) score += 12
-      for (const w of words) {
-        if (text.includes(w)) score += 3
+
+      // مطابقة العبارة الكاملة
+      if (safeQuery && text.includes(safeQuery)) score += 15
+
+      for (let i = 0; i < words.length; i++) {
+        const w = words[i]
+        const root = wordRoots[i]
+        const skeleton = wordSkeletons[i]
+
+        if (text.includes(w)) {
+          // مطابقة حرفية: نقاط أعلى إذا كانت في العنوان
+          score += titleLower.includes(w) ? 8 : 3
+        } else if (root && root.length >= 3 && text.includes(root)) {
+          // مطابقة جذرية (بدون مد): يغطي التصريفات مثل ترفيهية/ترفيهي
+          score += titleLower.includes(root) ? 5 : 2
+        } else if (skeleton && skeleton.length >= 3 && text.includes(skeleton)) {
+          // مطابقة الهيكل الصامت: يوحّد الجموع التكسيرية — مشاريع/مشروع → مشرع
+          score += titleSkeleton.includes(skeleton) ? 4 : 1
+        }
       }
 
-      if (section) {
+      if (sectionLower) {
         const inSection = (item.sections || []).some((s: any) =>
-          String(s.name || "").toLowerCase().includes(section.toLowerCase())
+          String(s.name || "").toLowerCase().includes(sectionLower)
         )
         if (!inSection) score = 0
       }
@@ -172,9 +262,14 @@ export async function siteSearch(
       return { item, score }
     })
     .filter(x => (words.length ? x.score > 0 : true))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, Math.min(Math.max(limit || 5, 1), 20))
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score
+      return (b.item.created_at_ts || 0) - (a.item.created_at_ts || 0)
+    })
+    .slice(0, Math.min(Math.max(limit || 2, 1), 20))
     .map(x => x.item)
+
+  console.log(`[Timing] siteSearch loop (${data.length} items): ${Date.now() - t1}ms → ${scored.length} results`)
 
   return {
     success: true,
@@ -238,7 +333,7 @@ export async function siteListCategories(
 }
 
 export async function siteGetLatest(
-  limit: number = 5,
+  limit: number = 2,
   section?: string
 ): Promise<APICallResult> {
   const allNews = await getAllNews()
@@ -311,7 +406,8 @@ export async function executeToolByName(
   try {
     switch (toolName) {
       case "search_projects":
-        return await siteSearch(args.query, args.section, args.limit)
+        // تجاهل limit من النموذج — الافتراضي 2 دائماً
+        return await siteSearch(args.query, args.section)
 
       case "get_project_by_id":
         return await siteGetProject(args.id)
@@ -320,7 +416,8 @@ export async function executeToolByName(
         return await siteListCategories(args.include_counts)
 
       case "get_latest_projects":
-        return await siteGetLatest(args.limit, args.section)
+        // تجاهل limit من النموذج — الافتراضي 2 دائماً
+        return await siteGetLatest(undefined, args.section)
 
       case "get_statistics":
         return await siteGetStatistics()
@@ -339,3 +436,10 @@ export async function executeToolByName(
     }
   }
 }
+
+// تحميل الكاش في الخلفية عند تشغيل السيرفر لتجنب التأخير عند أول طلب
+getAllNews().then(() => {
+  console.log("[Cache] Warm-up complete")
+}).catch(() => {
+  // DB قد لا يكون جاهزاً عند الـ start — سيُعاد المحاولة عند أول طلب
+})
