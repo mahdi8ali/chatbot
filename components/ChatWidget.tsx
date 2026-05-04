@@ -2,6 +2,36 @@
 
 import { useEffect, useRef, useState } from "react"
 
+// ── client-side link validation (mirrors server-side logic) ──────────────────
+const META_LINE = "\n__VALID_IDS__:"
+
+function extractNewsIdClient(url: string): string | null {
+  const m = url.match(/[?&]id=(\d+)/) || url.match(/\/news\/(\d+)/)
+  return m ? m[1] : null
+}
+
+function clientStripInvalidLinks(text: string, validIds: Set<string>): string {
+  const hasIds = validIds.size > 0
+  text = text.replace(
+    /\[([^\]]*)\]\((https:\/\/(?:www\.)?alkafeel\.net\/news[^\s)]*)\)/g,
+    (match, label, url) => {
+      if (!hasIds) return label
+      const id = extractNewsIdClient(url)
+      return (!id || validIds.has(id)) ? match : label
+    }
+  )
+  text = text.replace(
+    /https:\/\/(?:www\.)?alkafeel\.net\/news\S*/g,
+    (url) => {
+      if (!hasIds) return ""
+      const id = extractNewsIdClient(url)
+      return (!id || validIds.has(id)) ? url : ""
+    }
+  )
+  return text.replace(/🔗\s*(?:\[اقرأ المزيد\])?\s*\n?\s*$/gm, "").trim()
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 interface Message {
   role: "user" | "assistant"
   content: string
@@ -21,6 +51,7 @@ export default function ChatWidget({
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [isStreaming, setIsStreaming] = useState(false)
   const [showWelcome, setShowWelcome] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -71,14 +102,40 @@ export default function ChatWidget({
         const data = await response.json()
         botReply = data.message || "لم أتمكن من فهم الرد."
       } else if (response.body) {
-        // Standard fallback — streaming text
+        // ✅ True streaming — نعرض النص تدريجياً فور وصوله
+        setIsStreaming(true)
+        let accumulated = ""
+        // أضف رسالة البوت فارغة فوراً (تختفي الـ loading dots)
+        setMessages([...newMessages, { role: "assistant", content: "" }])
         const reader = response.body.getReader()
         const decoder = new TextDecoder()
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
-          botReply += decoder.decode(value, { stream: true })
+          accumulated += decoder.decode(value, { stream: true })
+          // أخفِ سطر الـ metadata عن المستخدم إذا وصل ضمن chunk
+          const mIdx = accumulated.lastIndexOf(META_LINE)
+          const display = mIdx !== -1 ? accumulated.slice(0, mIdx) : accumulated
+          setMessages(prev => {
+            const updated = [...prev]
+            updated[updated.length - 1] = { role: "assistant", content: display }
+            return updated
+          })
         }
+        // معالجة metadata وتنظيف الروابط في نهاية الـ stream
+        const metaIdx = accumulated.lastIndexOf(META_LINE)
+        if (metaIdx !== -1) {
+          const validIdsStr = accumulated.slice(metaIdx + META_LINE.length)
+          const validIds = new Set(validIdsStr.split(",").filter(Boolean))
+          let cleanText = accumulated.slice(0, metaIdx)
+          cleanText = clientStripInvalidLinks(cleanText, validIds)
+          setMessages(prev => {
+            const updated = [...prev]
+            updated[updated.length - 1] = { role: "assistant", content: cleanText }
+            return updated
+          })
+        }
+        return  // تجاوز setMessages في الأسفل
       } else {
         botReply = await response.text() || "لم يتم استلام رد."
       }
@@ -97,6 +154,7 @@ export default function ChatWidget({
       ])
     } finally {
       setIsLoading(false)
+      setIsStreaming(false)
       textareaRef.current?.focus()
     }
   }
@@ -485,7 +543,7 @@ export default function ChatWidget({
             </div>
           ))}
 
-          {isLoading && (
+          {isLoading && !isStreaming && (
             <div className="chat-widget-message assistant">
               <div className="chat-widget-avatar">🤖</div>
               <div className="chat-widget-message-content">

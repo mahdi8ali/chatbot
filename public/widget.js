@@ -448,6 +448,7 @@
     var reader = response.body.getReader();
     var decoder = new TextDecoder();
     var full = '';
+    var META_LINE = '\n__VALID_IDS__:';
     var id = 'alkw-st-' + Date.now();
     var bubble = this._makeBubble(id);
     var self = this;
@@ -455,11 +456,25 @@
     function pump() {
       return reader.read().then(function(result) {
         if (result.done) {
+          // معالجة metadata وتنظيف الروابط في نهاية الـ stream
+          var metaIdx = full.lastIndexOf(META_LINE);
+          if (metaIdx !== -1) {
+            var validIdsStr = full.slice(metaIdx + META_LINE.length);
+            var validIds = validIdsStr.split(',').filter(Boolean);
+            full = full.slice(0, metaIdx);
+            full = self._stripInvalidLinks(full, validIds);
+            bubble.innerHTML = self._fmt(full);
+            self._scroll();
+          }
           self.messages.push({ role: 'assistant', content: full });
           return;
         }
         full += decoder.decode(result.value, { stream: true });
-        bubble.innerHTML = self._fmt(full);
+        // أخفِ سطر الـ metadata عن المستخدم إذا وصل ضمن chunk
+        var display = full;
+        var mIdx = full.lastIndexOf(META_LINE);
+        if (mIdx !== -1) display = full.slice(0, mIdx);
+        bubble.innerHTML = self._fmt(display);
         self._scroll();
         return pump();
       });
@@ -472,6 +487,31 @@
       }
       self.messages.push({ role: 'assistant', content: full });
     });
+  };
+
+  AlkafeelChatWidget.prototype._stripInvalidLinks = function(text, validIds) {
+    var hasIds = validIds.length > 0;
+    function extractId(url) {
+      var m = url.match(/[?&]id=(\d+)/) || url.match(/\/news\/(\d+)/);
+      return m ? m[1] : null;
+    }
+    text = text.replace(
+      /\[([^\]]*)\]\((https?:\/\/(?:www\.)?alkafeel\.net\/news[^\s)]*)\)/g,
+      function(match, label, url) {
+        if (!hasIds) return label;
+        var id = extractId(url);
+        return (!id || validIds.indexOf(id) !== -1) ? match : label;
+      }
+    );
+    text = text.replace(
+      /https?:\/\/(?:www\.)?alkafeel\.net\/news\S*/g,
+      function(url) {
+        if (!hasIds) return '';
+        var id = extractId(url);
+        return (!id || validIds.indexOf(id) !== -1) ? url : '';
+      }
+    );
+    return text.replace(/🔗\s*(?:\[اقرأ المزيد\])?\s*\n?\s*$/gm, '').trim();
   };
 
   // ---------- DOM helpers ----------

@@ -271,25 +271,30 @@ export async function POST(request: Request) {
           stream: true
         })
 
-        // بافر الرد كاملاً ثم تحقق من الروابط قبل الإرسال
-        let fullResponse = ""
-        for await (const chunk of finalStream) {
-          fullResponse += chunk.choices[0]?.delta?.content || ""
-        }
+        // استخرج validIds من tool results مسبقاً (لا يحتاج انتظار الـ stream)
+        const validIds = toolResult.needsFinalCall
+          ? extractValidArticleIds(streamMessages)
+          : new Set<string>()
+        const validIdsStr = [...validIds].join(",")
 
-        // استخرج IDs التي أرجعتها الأدوات فعلاً واحذف أي رابط خارجها
-        if (toolResult.needsFinalCall) {
-          const validIds = extractValidArticleIds(streamMessages)
-          if (validIds.size > 0) {
-            const before = fullResponse
-            fullResponse = stripInvalidLinks(fullResponse, validIds)
-            if (fullResponse !== before) {
-              console.log(`[Link Validator] Stripped invalid link(s). Valid IDs: [${[...validIds].join(",")}]`)
+        // ✅ True streaming: أرسل chunks فوراً بدل الـ buffering
+        // ألحق __VALID_IDS__ في نهاية الـ stream للـ client ليتحقق من الروابط محلياً
+        const readable = new ReadableStream({
+          async start(controller) {
+            const enc = new TextEncoder()
+            try {
+              for await (const chunk of finalStream) {
+                const content = chunk.choices[0]?.delta?.content || ""
+                if (content) controller.enqueue(enc.encode(content))
+              }
+            } finally {
+              controller.enqueue(enc.encode(`\n__VALID_IDS__:${validIdsStr}`))
+              controller.close()
             }
           }
-        }
+        })
 
-        return new Response(fullResponse, {
+        return new Response(readable, {
           headers: {
             "Content-Type": "text/plain; charset=utf-8",
             ...securityHeaders

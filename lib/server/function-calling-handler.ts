@@ -288,7 +288,7 @@ export async function resolveToolCalls(
       model,
       messages: currentMessages,
       tools,
-      tool_choice: "auto",
+      tool_choice: toolsWereCalled ? "auto" : "required",  // أول call: أجبر على استدعاء أداة دائماً
       temperature: 0.5,
       max_tokens: 200  // اختيار الأداة فقط — لا يحتاج أكثر
     })
