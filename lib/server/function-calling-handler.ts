@@ -61,7 +61,13 @@ function cleanProject(project: any, detailed: boolean = false): any {
     description: truncate(project.description || "", detailed ? 800 : 600),
     sections: sectionNames,
     properties: Object.keys(properties).length > 0 ? properties : undefined,
-    url: project.id ? `https://alkafeel.net/news/index.php?id=${project.id}` : null,
+    // استخدام url المخصص للمصدر (null للسيرة والتاريخ والفيديو، رابط حقيقي للأخبار)
+    url: "url" in project
+      ? project.url
+      : (project.id ? `https://alkafeel.net/news/index.php?id=${project.id}` : null),
+    // حقل المصدر لمعرفة أصل النتيجة
+    ...(project.source_label ? { source_label: project.source_label } : {}),
+    ...(project.length ? { length: project.length } : {}),
   }
 }
 
@@ -288,7 +294,7 @@ export async function resolveToolCalls(
       model,
       messages: currentMessages,
       tools,
-      tool_choice: toolsWereCalled ? "auto" : "required",  // أول call: أجبر على استدعاء أداة دائماً
+      tool_choice: (toolsWereCalled ? "auto" : "required") as OpenAI.Chat.Completions.ChatCompletionToolChoiceOption,  // أول call: أجبر على استدعاء أداة دائماً
       temperature: 0.5,
       max_tokens: 200  // اختيار الأداة فقط — لا يحتاج أكثر
     })

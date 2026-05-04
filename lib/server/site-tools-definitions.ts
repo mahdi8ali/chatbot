@@ -16,7 +16,7 @@ export const TOOL_SEARCH_PROJECTS: ChatCompletionTool = {
   type: "function",
   function: {
     name: "search_projects",
-    description: "بحث في أخبار شبكة الكفيل بالعنوان والمحتوى والعنوان الفرعي. النتائج مرتبة بالتطابق.",
+    description: "بحث في قاعدة بيانات شبكة الكفيل الشاملة: الأخبار، سيرة أبي الفضل العباس (ع)، التاريخ، ومكتبة الفيديو. النتائج مرتبة بالتطابق ومصنّفة بحقل source_label.",
     parameters: {
       type: "object",
       properties: {
@@ -27,6 +27,11 @@ export const TOOL_SEARCH_PROJECTS: ChatCompletionTool = {
         section: {
           type: "string",
           description: "اسم القسم للتصفية (اختياري)"
+        },
+        source: {
+          type: "string",
+          description: "تحديد المصدر: news (أخبار) | sira (سيرة العباس) | history (التاريخ) | video (الفيديو). إذا لم يُحدد يبحث في الكل.",
+          enum: ["news", "sira", "history", "video"]
         },
         limit: {
           type: "number",
