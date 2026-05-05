@@ -58,7 +58,7 @@ function cleanProject(project: any, detailed: boolean = false): any {
   return {
     id: project.id,
     name: project.name,
-    description: truncate(project.description || "", detailed ? 800 : 600),
+    description: truncate(project.description || "", detailed ? 900 : 700),
     sections: sectionNames,
     properties: Object.keys(properties).length > 0 ? properties : undefined,
     // استخدام url المخصص للمصدر (null للسيرة والتاريخ والفيديو، رابط حقيقي للأخبار)

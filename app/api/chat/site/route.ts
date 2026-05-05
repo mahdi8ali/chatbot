@@ -2,6 +2,7 @@ import {
   getSiteSystemPrompt,
   getFallbackResponse
 } from "@/lib/server/system-prompts"
+import { searchFAQ } from "@/lib/server/faq"
 import { getOpenAIModel } from "@/lib/server/site-api-config"
 import { ALL_SITE_TOOLS } from "@/lib/server/site-tools-definitions"
 import { resolveToolCalls } from "@/lib/server/function-calling-handler"
@@ -226,6 +227,30 @@ export async function POST(request: Request) {
     const openai = new OpenAI({
       apiKey: openaiApiKey
     })
+
+    // ===== فحص FAQ الثابت أولاً =====
+    // إذا تطابق سؤال المستخدم مع إجابة موثوقة، أرسلها مباشرةً دون الاتصال بـ OpenAI
+    if (lastMessage.role === "user") {
+      const faqMatch = searchFAQ(lastMessage.content)
+      if (faqMatch) {
+        console.log(`[Chat API] FAQ hit for: "${lastMessage.content.slice(0, 60)}"`)
+        const faqText = faqMatch.url
+          ? `${faqMatch.answer}\n\n📖 *المصدر: سيرة أبي الفضل العباس (ع)* — 🔗 [اقرأ المزيد](${faqMatch.url})`
+          : faqMatch.answer
+
+        const encoder = new TextEncoder()
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(faqText))
+            controller.enqueue(encoder.encode(`\n__VALID_IDS__:`))
+            controller.close()
+          }
+        })
+        return new Response(stream, {
+          headers: { ...securityHeaders, "Content-Type": "text/plain; charset=utf-8" }
+        })
+      }
+    }
 
     // حقن System Prompt الثابت في بداية المحادثة
     // ✅ نستخدم sanitizedMessages (الرسائل المنظفة) وليس messages الخام

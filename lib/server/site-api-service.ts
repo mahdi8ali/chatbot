@@ -276,7 +276,7 @@ function mapAbbasToItem(row: AbbasRow) {
 function mapHistoryToItem(row: HistoryContentRow) {
   const textClean = stripHtml(row.content || "")
   const sectionTitle = row.section_title || "التاريخ"
-  const description = excerpt(textClean, 500)
+  const description = excerpt(textClean, 900)
   const { roots, skeletons } = buildTitleExtras(sectionTitle)
   const searchText = [sectionTitle, textClean, row.section_type].filter(Boolean).join(" ").toLowerCase()
     + " " + roots + " " + skeletons
