@@ -204,7 +204,7 @@ function mapNewsToItem(row: NewsRow) {
     .filter(Boolean)
     .join(" ")
 
-  const searchText = rawText.toLowerCase()
+  const searchText = rawText.toLowerCase().replace(/[ًٌٍَُِّْ]/g, "")
 
   // إضافة جذور كلمات العنوان لتحسين المطابقة الجذرية
   const titleRoots = (row.title || "")
@@ -256,7 +256,7 @@ function mapAbbasToItem(row: AbbasRow) {
   const textClean = stripHtml(row.text || "")
   const description = excerpt(textClean, 500)
   const { roots, skeletons } = buildTitleExtras(row.title || "")
-  const searchText = [row.title, textClean, row.tag].filter(Boolean).join(" ").toLowerCase()
+  const searchText = [row.title, textClean, row.tag].filter(Boolean).join(" ").toLowerCase().replace(/[ًٌٍَُِّْ]/g, "")
     + " " + roots + " " + skeletons
   return {
     id: `sira_${row.id}`,
@@ -278,7 +278,7 @@ function mapHistoryToItem(row: HistoryContentRow) {
   const sectionTitle = row.section_title || "التاريخ"
   const description = excerpt(textClean, 900)
   const { roots, skeletons } = buildTitleExtras(sectionTitle)
-  const searchText = [sectionTitle, textClean, row.section_type].filter(Boolean).join(" ").toLowerCase()
+  const searchText = [sectionTitle, textClean, row.section_type].filter(Boolean).join(" ").toLowerCase().replace(/[ًٌٍَُِّْ]/g, "")
     + " " + roots + " " + skeletons
   return {
     id: `history_${row.id}`,
@@ -301,7 +301,7 @@ function mapVideoToItem(row: VideoFileRow) {
   const sectionTitleAr = parseJsonAr(row.section_title)
   const description = captionAr || excerpt(titleAr, 300)
   const { roots, skeletons } = buildTitleExtras(titleAr)
-  const searchText = [titleAr, captionAr, sectionTitleAr].filter(Boolean).join(" ").toLowerCase()
+  const searchText = [titleAr, captionAr, sectionTitleAr].filter(Boolean).join(" ").toLowerCase().replace(/[ًٌٍَُِّْ]/g, "")
     + " " + roots + " " + skeletons
   return {
     id: `video_${row.id}`,
