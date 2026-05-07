@@ -190,7 +190,7 @@ function scoreItem(
 function mapNewsToItem(row: NewsRow) {
   const categoryName = row.category_id ? `تصنيف ${row.category_id}` : "أخبار شبكة الكفيل"
   const strippedContent = stripHtml(row.content || "")
-  const description = strippedContent.length <= 320 ? strippedContent : strippedContent.slice(0, 320) + "..."
+  const description = strippedContent.length <= 2500 ? strippedContent : strippedContent.slice(0, 2500) + "..."
 
   // بناء searchText مع جذور الكلمات لتغطية التصريفات المختلفة
   const rawText = [
@@ -438,7 +438,7 @@ async function getAllVideos(): Promise<APICallResult> {
 export async function siteSearch(
   query?: string,
   section?: string,
-  limit: number = 2,
+  limit: number = 3,
   source?: string
 ): Promise<APICallResult> {
   const t0 = Date.now()
