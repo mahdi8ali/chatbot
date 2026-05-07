@@ -53,8 +53,31 @@ export default function ChatWidget({
   const [isLoading, setIsLoading] = useState(false)
   const [isStreaming, setIsStreaming] = useState(false)
   const [showWelcome, setShowWelcome] = useState(true)
+  const [loadingPhase, setLoadingPhase] = useState(0)
+  const [phaseVisible, setPhaseVisible] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const loadingPhrases = [
+    "جارٍ تحليل طلبك…",
+    "جارٍ البحث في المصادر…",
+    "جارٍ جلب المعلومات…",
+    "جارٍ صياغة الإجابة…",
+  ]
+
+  useEffect(() => {
+    if (!isLoading || isStreaming) return
+    setLoadingPhase(0)
+    setPhaseVisible(true)
+    const interval = setInterval(() => {
+      setPhaseVisible(false)
+      setTimeout(() => {
+        setLoadingPhase(p => (p + 1) % loadingPhrases.length)
+        setPhaseVisible(true)
+      }, 350)
+    }, 2200)
+    return () => clearInterval(interval)
+  }, [isLoading, isStreaming])
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -173,25 +196,83 @@ export default function ChatWidget({
 
   const renderMarkdown = (text: string) => {
     if (!text) return ""
-    let html = text
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-      .replace(
-        /\[([^\]]+)\]\(([^)]+)\)/g,
-        '<a href="$2" target="_blank" rel="noopener">$1</a>'
-      )
-      .replace(/^(\d+)\.\s+(.+)$/gm, "<li>$2</li>")
-      .replace(/^[-•]\s+(.+)$/gm, "<li>$1</li>")
-      .replace(/^### (.+)$/gm, "<h3>$1</h3>")
-      .replace(/^## (.+)$/gm, "<h2>$1</h2>")
-      .replace(/\n/g, "<br>")
 
-    html = html.replace(/((<li>.+?<\/li>)(<br>)?)+/g, match => {
-      const items = match.replace(/<br>/g, "")
-      return "<ol>" + items + "</ol>"
-    })
+    // ── افصل سطور المصادر (📖 أو 🎬) عن نص الجواب ──────────────────────────
+    const lines = text.split("\n")
+    const sourceLines: string[] = []
+    const bodyLines: string[] = []
+    for (const line of lines) {
+      if (/^[📖🎬]/.test(line.trim())) {
+        sourceLines.push(line.trim())
+      } else {
+        bodyLines.push(line)
+      }
+    }
+
+    const processBody = (raw: string) => {
+      let html = raw
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+        .replace(
+          /\[([^\]]+)\]\(([^)]+)\)/g,
+          '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
+        )
+        .replace(/^(\d+)\.\s+(.+)$/gm, "<li>$2</li>")
+        .replace(/^[-•]\s+(.+)$/gm, "<li>$1</li>")
+        .replace(/^### (.+)$/gm, "<h3>$1</h3>")
+        .replace(/^## (.+)$/gm, "<h2>$1</h2>")
+        .replace(/\n/g, "<br>")
+      html = html.replace(/((<li>.+?<\/li>)(<br>)?)+/g, match => {
+        const items = match.replace(/<br>/g, "")
+        return "<ol>" + items + "</ol>"
+      })
+      return html
+    }
+
+    let html = processBody(bodyLines.join("\n"))
+
+    // ── عرض المصادر بشكل احترافي ─────────────────────────────────────────────
+    if (sourceLines.length > 0) {
+      const sourcesHtml = sourceLines.map(line => {
+        // استخرج الرابط والنص
+        const linkMatch = line.match(/\[([^\]]+)\]\(([^)]+)\)/)
+        const url    = linkMatch ? linkMatch[2] : ""
+        const label  = linkMatch ? linkMatch[1] : ""
+        // نص المصدر (بدون الإيموجي والرابط)
+        const meta = line
+          .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "")
+          .replace(/[📖🎬]/g, "")
+          .replace(/\*([^*]*)\*/g, "$1")
+          .replace(/—\s*🔗\s*$/, "")
+          .replace(/—\s*$/, "")
+          .trim()
+
+        const isVideo = line.startsWith("🎬")
+
+        // SVG inline من Lucide — احترافي ونظيف
+        const svgBook = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>`
+        const svgVideo = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`
+        const svgArrow = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`
+        const iconSvg = isVideo ? svgVideo : svgBook
+
+        return `<a class="gm-source-card" href="${url}" target="_blank" rel="noopener noreferrer">
+          <span class="gm-source-right">
+            <span class="gm-source-svg-icon">${iconSvg}</span>
+            <span class="gm-source-text">${label}</span>
+          </span>
+          <span class="gm-source-arrow">${svgArrow}</span>
+        </a>`
+      }).join("")
+
+      html += `<div class="gm-sources-block">
+        <div class="gm-sources-sep"></div>
+        <div class="gm-sources-title">المصادر</div>
+        <div class="gm-sources-list">${sourcesHtml}</div>
+      </div>`
+    }
 
     return html
   }
@@ -206,380 +287,558 @@ export default function ChatWidget({
     { emoji: "🏛️", label: "تشكيلات إدارية", query: "أعرض لي تشكيلات إدارية" }
   ]
 
+  const hasMessages = messages.length > 0
+
   return (
     <>
       <style jsx global>{`
-        .chat-widget-container * {
-          box-sizing: border-box;
-        }
-        
-        .chat-widget-container {
-          font-family: 'Readex Pro', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-          width: 100%;
-          height: 100%;
-          background: #111827;
-          border-radius: 8px;
+        /* ═══════════════════════════════════════════════
+           ROOT
+        ═══════════════════════════════════════════════ */
+        .gm-root {
           display: flex;
           flex-direction: column;
-          overflow: hidden;
-          box-shadow: 0 8px 40px rgba(0,0,0,0.5);
-          border: 1px solid #1f2937;
+          height: 100%;
+          width: 100%;
+          background: #ffffff;
           direction: rtl;
+          font-family: 'Google Sans', 'Segoe UI', system-ui, sans-serif;
+          color: #1f1f1f;
+          overflow: hidden;
         }
-        
-        .chat-widget-header {
-          background: linear-gradient(135deg, #1e40af 0%, #7c3aed 100%);
-          color: white;
-          padding: 15px;
+
+        /* ═══════════════════════════════════════════════
+           HEADER
+        ═══════════════════════════════════════════════ */
+        .gm-header {
           display: flex;
-          justify-content: space-between;
           align-items: center;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          justify-content: space-between;
+          padding: 0 24px;
+          height: 56px;
+          border-bottom: 1px solid #e8eaed;
+          flex-shrink: 0;
+          background: #fff;
         }
-        
-        .chat-widget-header-text h2 {
-          margin: 0;
-          font-size: 18px;
-          font-weight: 600;
+
+        .gm-logo {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-size: 16px;
+          font-weight: 500;
+          color: #1f1f1f;
         }
-        
-        .chat-widget-header-text p {
-          margin: 4px 0 0 0;
-          font-size: 12px;
-          opacity: 0.9;
+
+        .gm-logo-dot {
+          width: 26px;
+          height: 26px;
+          border-radius: 50%;
+          background: #4e6833;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 10px;
+          font-weight: 700;
+          color: #fff;
+          flex-shrink: 0;
         }
-        
-        .chat-widget-clear-btn {
-          background: rgba(255, 255, 255, 0.15);
-          border: none;
-          padding: 6px 12px;
-          border-radius: 6px;
-          color: white;
+
+        .gm-clear-btn {
+          background: transparent;
+          border: 1px solid #dadce0;
+          color: #5f6368;
+          padding: 7px 16px;
+          border-radius: 20px;
           font-size: 13px;
           cursor: pointer;
-          transition: all 0.2s;
+          transition: background 0.15s, border-color 0.15s;
+          font-family: inherit;
         }
-        
-        .chat-widget-clear-btn:hover {
-          background: rgba(255, 255, 255, 0.25);
+        .gm-clear-btn:hover {
+          background: #f8f9fa;
+          border-color: #bdc1c6;
         }
-        
-        .chat-widget-messages {
+
+        /* ═══════════════════════════════════════════════
+           STAGE  (relative container for all layers)
+        ═══════════════════════════════════════════════ */
+        .gm-stage {
           flex: 1;
-          overflow-y: auto;
-          padding: 15px;
-          background: #0f172a;
+          position: relative;
+          overflow: hidden;
         }
-        
-        .chat-widget-welcome {
+
+        /* ═══════════════════════════════════════════════
+           WELCOME LAYER  (fades out when messages arrive)
+        ═══════════════════════════════════════════════ */
+        .gm-welcome-layer {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: flex-start;
+          padding: 64px 24px 0;
           text-align: center;
-          padding: 40px 20px;
-          color: #94a3b8;
+          gap: 20px;
+          opacity: 1;
+          transition: opacity 0.35s ease, transform 0.35s ease;
+          pointer-events: all;
+          overflow: hidden;
         }
-        
-        .chat-widget-welcome h3 {
-          color: white;
-          margin: 0 0 10px 0;
-          font-size: 20px;
+        .gm-welcome-layer.out {
+          opacity: 0;
+          transform: translateY(-12px);
+          pointer-events: none;
         }
-        
-        .chat-widget-welcome p {
-          margin: 0 0 25px 0;
-          font-size: 14px;
+
+        .gm-welcome-title {
+          font-size: 26px;
+          font-weight: 400;
+          color: #1f1f1f;
+          margin: 0;
+          line-height: 1.45;
         }
-        
-        .chat-widget-quick-buttons {
+        .gm-welcome-title em {
+          font-style: normal;
+          font-weight: 600;
+          color: #4e6833;
+        }
+
+        .gm-chips {
           display: flex;
           flex-wrap: wrap;
-          gap: 8px;
+          gap: 10px;
           justify-content: center;
-          margin-top: 20px;
+          max-width: 640px;
         }
-        
-        .chat-widget-quick-btn {
-          background: #1e293b;
-          border: 1px solid #334155;
-          padding: 8px 12px;
-          border-radius: 6px;
-          color: #e2e8f0;
-          font-size: 13px;
+
+        .gm-chip {
+          background: #fff;
+          border: 1px solid #dadce0;
+          color: #3c4043;
+          padding: 9px 18px;
+          border-radius: 20px;
+          font-size: 13.5px;
           cursor: pointer;
-          transition: all 0.2s;
+          transition: background 0.15s, border-color 0.15s;
+          font-family: inherit;
           display: flex;
           align-items: center;
           gap: 6px;
         }
-        
-        .chat-widget-quick-btn:hover {
-          background: #334155;
-          border-color: #475569;
+        .gm-chip:hover {
+          background: #f8f9fa;
+          border-color: #9aa0a6;
         }
-        
-        .chat-widget-message {
-          margin-bottom: 15px;
+
+        /* ═══════════════════════════════════════════════
+           MESSAGES LAYER  (fades in, scrollable)
+        ═══════════════════════════════════════════════ */
+        .gm-messages-layer {
+          position: absolute;
+          inset: 0;
+          overflow-y: auto;
+          padding: 28px 16px 110px;
+          opacity: 0;
+          transition: opacity 0.3s ease 0.1s;
+          pointer-events: none;
+          scrollbar-width: thin;
+          scrollbar-color: #dadce0 transparent;
+        }
+        .gm-messages-layer::-webkit-scrollbar { width: 4px; }
+        .gm-messages-layer::-webkit-scrollbar-thumb {
+          background: #dadce0;
+          border-radius: 2px;
+        }
+        .gm-messages-layer.in {
+          opacity: 1;
+          pointer-events: all;
+        }
+
+        .gm-messages-inner {
+          max-width: 720px;
+          margin: 0 auto;
           display: flex;
-          gap: 10px;
-          animation: fadeInUp 0.3s ease;
+          flex-direction: column;
+          gap: 22px;
         }
-        
-        @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+
+        /* ═══════════════════════════════════════════════
+           MESSAGE ROWS
+        ═══════════════════════════════════════════════ */
+        .gm-row {
+          display: flex;
+          gap: 12px;
+          animation: msgIn 0.3s ease;
         }
-        
-        .chat-widget-message.user {
-          flex-direction: row-reverse;
+
+        @keyframes msgIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to   { opacity: 1; transform: translateY(0); }
         }
-        
-        .chat-widget-avatar {
-          width: 32px;
-          height: 32px;
+
+        /* كل الرسائل من اليمين — المشروع عربي بالكامل */
+        .gm-row.user,
+        .gm-row.assistant {
+          flex-direction: row;
+          justify-content: flex-start;
+          align-items: flex-start;
+        }
+
+        .gm-ai-dot {
+          width: 28px;
+          height: 28px;
           border-radius: 50%;
+          border: 1px solid #dadce0;
+          background: #fff;
+          color: #4e6833;
+          font-size: 9px;
+          font-weight: 700;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 16px;
           flex-shrink: 0;
+          margin-top: 3px;
         }
-        
-        .chat-widget-message.user .chat-widget-avatar {
-          background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+
+        /* فقاعة المستخدم */
+        .gm-row.user .gm-bubble {
+          background: #f1f3f4;
+          color: #1f1f1f;
+          border: 1px solid #e8eaed;
+          border-radius: 18px 4px 18px 18px;
+          padding: 11px 18px;
+          max-width: 65%;
+          font-size: 15px;
+          line-height: 1.7;
         }
-        
-        .chat-widget-message.assistant .chat-widget-avatar {
-          background: linear-gradient(135deg, #10b981 0%, #06b6d4 100%);
+
+        /* نص البوت — بدون فقاعة، فقط نص */
+        .gm-row.assistant .gm-bubble {
+          color: #1f1f1f;
+          max-width: 78%;
+          font-size: 15px;
+          line-height: 1.8;
+          padding: 4px 0;
         }
-        
-        .chat-widget-message-content {
-          max-width: 80%;
-          padding: 10px 14px;
-          border-radius: 12px;
-          line-height: 1.5;
-          font-size: 14px;
+
+        /* Markdown */
+        .gm-bubble strong  { font-weight: 600; }
+        .gm-bubble a       { color: #4e6833; text-decoration: underline; }
+        .gm-bubble ol,
+        .gm-bubble ul      { margin: 8px 0; padding-right: 20px; }
+        .gm-bubble li      { margin: 5px 0; }
+        .gm-bubble h2,
+        .gm-bubble h3      { font-size: 15.5px; font-weight: 600; margin: 12px 0 5px; }
+
+        /* ═══════════════════════════════════════════════
+           TYPING DOTS
+        ═══════════════════════════════════════════════ */
+        .gm-typing {
+          display: flex;
+          gap: 5px;
+          align-items: center;
+          padding: 8px 0;
         }
-        
-        .chat-widget-message.user .chat-widget-message-content {
-          background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-          color: white;
-          border-bottom-left-radius: 4px;
+        .gm-typing span {
+          width: 7px; height: 7px; border-radius: 50%;
+          background: #9aa0a6;
+          animation: typingDot 1.4s ease-in-out infinite;
         }
-        
-        .chat-widget-message.assistant .chat-widget-message-content {
-          background: #1e293b;
-          color: #e2e8f0;
-          border: 1px solid #334155;
-          border-bottom-right-radius: 4px;
+        .gm-typing span:nth-child(2) { animation-delay: 0.2s; }
+        .gm-typing span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typingDot {
+          0%, 80%, 100% { opacity: 0.35; transform: scale(0.75); }
+          40%           { opacity: 1;    transform: scale(1); }
         }
-        
-        .chat-widget-message-content a {
-          color: #60a5fa;
-          text-decoration: underline;
+
+        /* ── Loading phrase ── */
+        .gm-loading-text {
+          display: inline-block;
+          font-size: 14.5px;
+          color: #5f6368;
+          opacity: 0;
+          transform: translateY(8px);
+          transition: opacity 0.32s ease, transform 0.32s ease;
         }
-        
-        .chat-widget-message-content strong {
+        .gm-loading-text.visible {
+          opacity: 1;
+          transform: translateY(0);
+        }
+
+        /* ═══════════════════════════════════════════════
+           SOURCES BLOCK
+        ═══════════════════════════════════════════════ */
+        .gm-sources-block {
+          margin-top: 16px;
+          direction: rtl;
+        }
+
+        .gm-sources-sep {
+          height: 1px;
+          background: #e8eaed;
+          margin-bottom: 12px;
+        }
+
+        .gm-sources-title {
+          font-size: 11px;
           font-weight: 600;
+          color: #bdc1c6;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          margin-bottom: 8px;
         }
-        
-        .chat-widget-message-content ol {
-          margin: 8px 0;
-          padding-right: 20px;
-        }
-        
-        .chat-widget-message-content li {
-          margin: 4px 0;
-        }
-        
-        .chat-widget-loading {
+
+        .gm-sources-list {
           display: flex;
-          gap: 4px;
-          padding: 10px;
+          flex-direction: column;
+          gap: 6px;
         }
-        
-        .chat-widget-loading span {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          background: #60a5fa;
-          animation: pulse 1.4s infinite;
-        }
-        
-        .chat-widget-loading span:nth-child(2) {
-          animation-delay: 0.2s;
-        }
-        
-        .chat-widget-loading span:nth-child(3) {
-          animation-delay: 0.4s;
-        }
-        
-        @keyframes pulse {
-          0%, 80%, 100% {
-            opacity: 0.3;
-            transform: scale(0.8);
-          }
-          40% {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-        
-        .chat-widget-input-area {
-          padding: 15px;
-          background: #1e293b;
-          border-top: 1px solid #334155;
-        }
-        
-        .chat-widget-input-wrapper {
+
+        .gm-source-card {
           display: flex;
-          gap: 8px;
-          align-items: flex-end;
-        }
-        
-        .chat-widget-textarea {
-          flex: 1;
-          background: #0f172a;
-          border: 1px solid #334155;
+          align-items: center;
+          justify-content: space-between;
+          padding: 10px 14px;
+          border: 1px solid #e8eaed;
           border-radius: 8px;
-          padding: 10px 12px;
-          color: white;
-          font-size: 14px;
+          text-decoration: none !important;
+          background: #fff;
+          color: #3c4043;
+          transition: background 0.15s, border-color 0.15s;
+          direction: rtl;
+        }
+        .gm-source-card:hover {
+          background: #f8f9fa;
+          border-color: #bdc1c6;
+        }
+
+        .gm-source-right {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          overflow: hidden;
+        }
+
+        .gm-source-svg-icon {
+          display: flex;
+          align-items: center;
+          flex-shrink: 0;
+          color: #5f6368;
+        }
+
+        .gm-source-text {
+          font-size: 13.5px;
+          color: #3c4043;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          font-weight: 400;
+        }
+
+        .gm-source-arrow {
+          display: flex;
+          align-items: center;
+          flex-shrink: 0;
+          color: #bdc1c6;
+          margin-right: 10px;
+        }
+
+        /* ═══════════════════════════════════════════════
+           STREAMING CURSOR
+        ═══════════════════════════════════════════════ */
+        .gm-cursor {
+          display: inline-block;
+          width: 2px;
+          height: 1em;
+          background: #4e6833;
+          margin-right: 2px;
+          vertical-align: text-bottom;
+          animation: blink 0.7s step-end infinite;
+        }
+        @keyframes blink {
+          0%, 100% { opacity: 1; }
+          50%       { opacity: 0; }
+        }
+
+        /* ═══════════════════════════════════════════════
+           INPUT ZONE
+           — يبدأ في المنتصف العمودي، ينزل للأسفل بـ transition
+        ═══════════════════════════════════════════════ */
+        .gm-input-zone {
+          position: absolute;
+          left: 50%;
+          transform: translateX(-50%);
+          width: calc(100% - 32px);
+          max-width: 680px;
+          bottom: 16px;
+          transition: bottom 0.48s cubic-bezier(0.4, 0, 0.2, 1);
+          z-index: 10;
+        }
+        /* الوضع الأولي: أسفل المنتصف عمودياً */
+        .gm-input-zone.centered {
+          bottom: 28%;
+        }
+
+        .gm-input-box {
+          display: flex;
+          align-items: flex-end;
+          background: #fff;
+          border: 1px solid #dadce0;
+          border-radius: 24px;
+          padding: 12px 16px;
+          gap: 10px;
+          transition: border-color 0.2s;
+        }
+        .gm-input-box:focus-within {
+          border-color: #9aa0a6;
+        }
+
+        .gm-textarea {
+          flex: 1;
+          background: transparent;
+          border: none;
+          outline: none;
+          color: #1f1f1f;
+          font-size: 15px;
           font-family: inherit;
           resize: none;
-          max-height: 120px;
-          min-height: 44px;
+          max-height: 130px;
+          min-height: 24px;
+          line-height: 1.5;
+          direction: rtl;
         }
-        
-        .chat-widget-textarea:focus {
-          outline: none;
-          border-color: #3b82f6;
-        }
-        
-        .chat-widget-textarea::placeholder {
-          color: #64748b;
-        }
-        
-        .chat-widget-send-btn {
-          background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+        .gm-textarea::placeholder { color: #9aa0a6; }
+
+        .gm-send-btn {
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
           border: none;
-          padding: 10px 20px;
-          border-radius: 8px;
-          color: white;
-          font-size: 14px;
-          font-weight: 500;
+          background: #4e6833;
+          color: #fff;
+          font-size: 17px;
           cursor: pointer;
-          transition: all 0.2s;
-          min-width: 70px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          transition: background 0.2s, opacity 0.2s;
+          line-height: 1;
         }
-        
-        .chat-widget-send-btn:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-        }
-        
-        .chat-widget-send-btn:disabled {
-          opacity: 0.5;
+        .gm-send-btn:hover:not(:disabled) { background: #3a5025; }
+        .gm-send-btn:disabled {
+          background: #e8eaed;
+          color: #9aa0a6;
           cursor: not-allowed;
+        }
+
+        .gm-hint {
+          text-align: center;
+          font-size: 11px;
+          color: #9aa0a6;
+          margin-top: 9px;
         }
       `}</style>
 
-      <div className="chat-widget-container">
-        {/* Header */}
-        <div className="chat-widget-header">
-          <div className="chat-widget-header-text">
-            <h2>{title}</h2>
-            <p>{subtitle}</p>
+      <div className="gm-root">
+
+        {/* ── Header ── */}
+        <div className="gm-header">
+          <div className="gm-logo">
+            <div className="gm-logo-dot">AI</div>
+            <span>المساعد الذكي — شبكة الكفيل</span>
           </div>
-          {messages.length > 0 && (
-            <button
-              onClick={clearChat}
-              className="chat-widget-clear-btn"
-            >
-              مسح المحادثة
-            </button>
+          {hasMessages && (
+            <button className="gm-clear-btn" onClick={clearChat}>محادثة جديدة</button>
           )}
         </div>
 
-        {/* Messages Area */}
-        <div className="chat-widget-messages">
-          {showWelcome && messages.length === 0 && (
-            <div className="chat-widget-welcome">
-              <h3>👋 مرحباً بك!</h3>
-              <p>أنا مساعدك الذكي للاستعلام عن مشاريع العتبة العباسية المقدسة</p>
-              <p style={{ fontSize: "13px", marginBottom: "10px" }}>جرّب الأسئلة السريعة:</p>
-              <div className="chat-widget-quick-buttons">
-                {quickButtons.map((btn, i) => (
-                  <button
-                    key={i}
-                    onClick={() => sendMessage(btn.query)}
-                    className="chat-widget-quick-btn"
-                  >
-                    <span>{btn.emoji}</span>
-                    <span>{btn.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+        {/* ── Stage ── */}
+        <div className="gm-stage">
 
-          {messages.map((msg, i) => (
-            <div
-              key={i}
-              className={`chat-widget-message ${msg.role}`}
-            >
-              <div className="chat-widget-avatar">
-                {msg.role === "user" ? "👤" : "🤖"}
-              </div>
-              <div
-                className="chat-widget-message-content"
-                dangerouslySetInnerHTML={{
-                  __html: renderMarkdown(msg.content)
-                }}
-              />
+          {/* Welcome Layer */}
+          <div className={`gm-welcome-layer${hasMessages ? " out" : ""}`}>
+            <h1 className="gm-welcome-title">
+              مرحباً،<br />كيف يمكنني <em>مساعدتك</em> اليوم؟
+            </h1>
+            <div className="gm-chips">
+              {quickButtons.map((btn, i) => (
+                <button key={i} className="gm-chip" onClick={() => sendMessage(btn.query)}>
+                  <span>{btn.emoji}</span>
+                  {btn.label}
+                </button>
+              ))}
             </div>
-          ))}
+          </div>
 
-          {isLoading && !isStreaming && (
-            <div className="chat-widget-message assistant">
-              <div className="chat-widget-avatar">🤖</div>
-              <div className="chat-widget-message-content">
-                <div className="chat-widget-loading">
-                  <span></span>
-                  <span></span>
-                  <span></span>
+          {/* Messages Layer */}
+          <div className={`gm-messages-layer${hasMessages ? " in" : ""}`}>
+            <div className="gm-messages-inner">
+              {messages.map((msg, i) => (
+                <div key={i} className={`gm-row ${msg.role}`}>
+                  {msg.role === "assistant" && (
+                    <div className="gm-ai-dot">AI</div>
+                  )}
+                  <div
+                    className="gm-bubble"
+                    dangerouslySetInnerHTML={{
+                      __html:
+                        renderMarkdown(msg.content) +
+                        (isStreaming && i === messages.length - 1 && msg.role === "assistant"
+                          ? '<span class="gm-cursor"></span>'
+                          : "")
+                    }}
+                  />
                 </div>
-              </div>
+              ))}
+
+              {isLoading && !isStreaming && (
+                <div className="gm-row assistant">
+                  <div className="gm-ai-dot">AI</div>
+                  <div className="gm-bubble">
+                    <span
+                      className={`gm-loading-text${phaseVisible ? " visible" : ""}`}
+                    >
+                      {loadingPhrases[loadingPhase]}
+                    </span>
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
             </div>
-          )}
-
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input Area */}
-        <div className="chat-widget-input-area">
-          <div className="chat-widget-input-wrapper">
-            <textarea
-              ref={textareaRef}
-              className="chat-widget-textarea"
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="اكتب سؤالك هنا..."
-              rows={1}
-              disabled={isLoading}
-            />
-            <button
-              onClick={() => sendMessage()}
-              disabled={!input.trim() || isLoading}
-              className="chat-widget-send-btn"
-            >
-              {isLoading ? "..." : "إرسال"}
-            </button>
           </div>
+
+          {/* Input Zone — slides from center to bottom */}
+          <div className={`gm-input-zone${!hasMessages ? " centered" : ""}`}>
+            <div className="gm-input-box">
+              <textarea
+                ref={textareaRef}
+                className="gm-textarea"
+                value={input}
+                onChange={e => {
+                  setInput(e.target.value)
+                  e.target.style.height = "auto"
+                  e.target.style.height = Math.min(e.target.scrollHeight, 130) + "px"
+                }}
+                onKeyDown={handleKeyDown}
+                placeholder="اسألني أي شيء…"
+                rows={1}
+                disabled={isLoading}
+              />
+              <button
+                className="gm-send-btn"
+                onClick={() => sendMessage()}
+                disabled={!input.trim() || isLoading}
+              >
+                {isLoading ? "⟳" : "↑"}
+              </button>
+            </div>
+            <div className="gm-hint">Enter للإرسال &nbsp;·&nbsp; Shift+Enter لسطر جديد</div>
+          </div>
+
         </div>
       </div>
     </>

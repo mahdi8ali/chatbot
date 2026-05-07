@@ -438,7 +438,7 @@ async function getAllVideos(): Promise<APICallResult> {
 export async function siteSearch(
   query?: string,
   section?: string,
-  limit: number = 3,
+  limit: number = 5,
   source?: string
 ): Promise<APICallResult> {
   const t0 = Date.now()
