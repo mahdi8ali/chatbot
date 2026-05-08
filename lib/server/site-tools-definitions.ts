@@ -139,6 +139,27 @@ export const TOOL_GET_STATISTICS: ChatCompletionTool = {
 }
 
 /**
+ * أداة البحث في معلومات الاتصال والأقسام
+ */
+export const TOOL_SEARCH_CONTACTS: ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "search_contacts",
+    description: "البحث في معلومات الاتصال بأقسام العتبة العباسية: أرقام الهاتف، الإيميلات، العناوين. استخدم هذه الأداة عندما يسأل المستخدم عن كيفية التواصل مع جهة أو قسم معين.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "اسم القسم أو الجهة للبحث عنها (مثال: الأمانة العامة، متحف الكفيل، دار الكفيل)"
+        }
+      },
+      required: []
+    }
+  }
+}
+
+/**
  * قائمة جميع الأدوات المتاحة
  */
 export const ALL_SITE_TOOLS: ChatCompletionTool[] = [
@@ -146,7 +167,8 @@ export const ALL_SITE_TOOLS: ChatCompletionTool[] = [
   TOOL_GET_PROJECT_BY_ID,
   TOOL_FILTER_PROJECTS,
   TOOL_GET_LATEST_PROJECTS,
-  TOOL_GET_STATISTICS
+  TOOL_GET_STATISTICS,
+  TOOL_SEARCH_CONTACTS
 ]
 
 /**
@@ -157,7 +179,8 @@ export const ALLOWED_TOOL_NAMES = [
   "get_project_by_id",
   "filter_projects",
   "get_latest_projects",
-  "get_statistics"
+  "get_statistics",
+  "search_contacts"
 ] as const
 
 export type AllowedToolName = (typeof ALLOWED_TOOL_NAMES)[number]

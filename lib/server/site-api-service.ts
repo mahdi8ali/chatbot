@@ -638,6 +638,103 @@ export async function siteGetStatistics(): Promise<APICallResult> {
   }
 }
 
+export async function searchContacts(query?: string): Promise<APICallResult> {
+  try {
+    const db = getPool()
+
+    // بيانات الاتصال الرئيسية (هاتف وإيميل عام)
+    const [mainRows] = await db.query<RowDataPacket[]>(
+      `SELECT type, contact_info FROM contact_main WHERE deleted_at IS NULL ORDER BY id`
+    )
+
+    // الأقسام مع تفاصيل الاتصال
+    let divQuery = `
+      SELECT cd.id, cd.title AS division_title, cd.address,
+             csd.name AS contact_name, csd.phone, csd.email, csd.title AS contact_title
+      FROM contact_divisions cd
+      LEFT JOIN contact_sub_divisions csd ON csd.contact_division_id = cd.id AND csd.deleted_at IS NULL
+      WHERE cd.deleted_at IS NULL
+      ORDER BY cd.id, csd.id
+    `
+    const [divRows] = await db.query<RowDataPacket[]>(divQuery)
+
+    // تجميع الأقسام
+    const divisionsMap = new Map<number, any>()
+    for (const row of divRows) {
+      if (!divisionsMap.has(row.id)) {
+        divisionsMap.set(row.id, {
+          id: row.id,
+          title: row.division_title,
+          address: row.address,
+          contacts: []
+        })
+      }
+      if (row.contact_name) {
+        let phones: string[] = []
+        try { phones = JSON.parse(row.phone || "[]") } catch { phones = row.phone ? [row.phone] : [] }
+        divisionsMap.get(row.id).contacts.push({
+          name: row.contact_name,
+          phones,
+          email: row.email || null,
+          title: row.contact_title || null
+        })
+      }
+    }
+
+    let divisions = Array.from(divisionsMap.values())
+
+    // فلترة بالبحث إن وُجد
+    if (query && query.trim()) {
+      const q = query.trim().toLowerCase().replace(/[ًٌٍَُِّْ]/g, "")
+      divisions = divisions.filter(d => {
+        const text = [d.title, d.address, ...d.contacts.map((c: any) => c.name + " " + (c.title || ""))]
+          .join(" ").toLowerCase().replace(/[ًٌٍَُِّْ]/g, "")
+        return text.includes(q)
+      })
+    }
+
+    // بناء بنية مسطحة سهلة للنموذج
+    const contacts: any[] = []
+    for (const div of divisions) {
+      if (div.contacts.length > 0) {
+        for (const c of div.contacts) {
+          contacts.push({
+            department: div.title,
+            address: c.title || div.address || null,
+            phones: c.phones,
+            email: c.email || null
+          })
+        }
+      } else {
+        contacts.push({
+          department: div.title,
+          address: div.address || null,
+          phones: [],
+          email: null
+        })
+      }
+    }
+
+    // البيانات العامة للعتبة (هاتف/إيميل رئيسي)
+    const general: { phones: string[]; emails: string[] } = { phones: [], emails: [] }
+    for (const row of mainRows as any[]) {
+      if (row.type === "phone") general.phones.push(row.contact_info)
+      else if (row.type === "email") general.emails.push(row.contact_info)
+    }
+
+    return {
+      success: true,
+      data: {
+        contacts,
+        general,
+        total: contacts.length
+      }
+    }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
 export async function executeToolByName(
   toolName: AllowedToolName,
   args: Record<string, any>
@@ -662,6 +759,9 @@ export async function executeToolByName(
 
       case "get_statistics":
         return await siteGetStatistics()
+
+      case "search_contacts":
+        return await searchContacts(args.query)
 
       default:
         return {

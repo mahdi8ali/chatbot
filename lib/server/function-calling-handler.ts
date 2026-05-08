@@ -217,12 +217,46 @@ async function processToolCall(
 
   // صياغة الرد العادي (نتائج موجودة)
   // تنظيف البيانات لتكون مختصرة ومفيدة لـ GPT
-  const cleanedResult = cleanResultForGPT(result)
+
+  let content: string
+
+  // لأداة search_contacts: أعد نصاً منسقاً مسبقاً بدل JSON خام
+  if (toolName === "search_contacts" && result.success && result.data?.contacts) {
+    const { contacts, general } = result.data as {
+      contacts: Array<{ department: string; address: string | null; phones: string[]; email: string | null }>
+      general: { phones: string[]; emails: string[] }
+      total: number
+    }
+
+    const lines: string[] = []
+
+    if (contacts.length > 0) {
+      for (const c of contacts) {
+        lines.push(`**${c.department}**`)
+        if (c.address) lines.push(`📍 ${c.address}`)
+        if (c.phones && c.phones.length > 0) lines.push(`📞 ${c.phones.join("، ")}`)
+        if (c.email) lines.push(`📧 ${c.email}`)
+        lines.push("")
+      }
+    }
+
+    if (general?.phones?.length > 0 || general?.emails?.length > 0) {
+      lines.push("**معلومات الاتصال العامة بالعتبة العباسية**")
+      if (general.phones?.length > 0) lines.push(`📞 ${general.phones.join("، ")}`)
+      if (general.emails?.length > 0) lines.push(`📧 ${general.emails.join("، ")}`)
+    }
+
+    content = lines.join("\n").trim() || "لم يتم العثور على معلومات اتصال."
+    console.log(`[Function Call] search_contacts formatted:\n${content}`)
+  } else {
+    const cleanedResult = cleanResultForGPT(result)
+    content = JSON.stringify(cleanedResult)
+  }
 
   const toolResponse = {
     tool_call_id: toolCallId,
     role: "tool" as const,
-    content: JSON.stringify(cleanedResult)
+    content
   }
 
   console.log(

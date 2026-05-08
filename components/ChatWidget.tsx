@@ -228,17 +228,17 @@ export default function ChatWidget({
     const bodyLines: string[] = []
     for (const line of lines) {
       const t = line.trim()
-      if (/^[📖🎬]/.test(t)) {
+      if (/^[\u{1F4D6}\u{1F3AC}]/u.test(t)) {
         sourceLines.push(t)
       } else if (/^🔗\s*\[/.test(t) || /^\*\(تاريخ/.test(t)) {
-        // روابط 🔗 المنفردة → تُعامَل كمصدر
         sourceLines.push(t)
       } else {
         bodyLines.push(line)
       }
     }
 
-    const processBody = (raw: string) => {
+    // ── تحويل النص العادي إلى HTML ─────────────────────────────────────────
+    const processPlainText = (raw: string): string => {
       let html = raw
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
@@ -258,10 +258,69 @@ export default function ChatWidget({
         const items = match.replace(/<br>/g, "")
         return "<ol>" + items + "</ol>"
       })
+      // أرقام هاتف وإيميلات → روابط قابلة للنقر
+      html = html.replace(/(00964\d{7,12})/g, n => `<a href="tel:${n}" class="gm-phone-link">${n}</a>`)
+      html = html.replace(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g, e => `<a href="mailto:${e}" class="gm-email-link">${e}</a>`)
       return html
     }
 
-    let html = processBody(bodyLines.join("\n"))
+    // ── كشف كتل الاتصال وتحويلها لبطاقات جميلة ─────────────────────────────
+    // نقسّم الـ body إلى مقاطع: نص عادي / بطاقة اتصال
+    const CONTACT_EMOJI = /^(📍|📞|📧)/u
+    const inputLines = bodyLines
+    const segments: Array<{ type: "text" | "contact"; lines: string[]; name?: string }> = []
+    let i = 0
+    while (i < inputLines.length) {
+      const line = inputLines[i]
+      const trimmed = line.trim()
+      // هل هذا رأس بطاقة اتصال؟ (سطر **نص** يتبعه سطر يبدأ بإيموجي اتصال)
+      const isContactHeader =
+        /^\*\*[^*]+\*\*\s*$/.test(trimmed) &&
+        inputLines.slice(i + 1, i + 6).some(l => CONTACT_EMOJI.test(l.trim()))
+      if (isContactHeader) {
+        const name = trimmed.replace(/^\*\*|\*\*$/g, "")
+        const contactLines: string[] = []
+        i++
+        while (i < inputLines.length && CONTACT_EMOJI.test(inputLines[i].trim())) {
+          contactLines.push(inputLines[i].trim())
+          i++
+        }
+        segments.push({ type: "contact", lines: contactLines, name })
+      } else {
+        // أضف للمقطع النصي الأخير أو ابدأ مقطعاً جديداً
+        if (segments.length === 0 || segments[segments.length - 1].type !== "text") {
+          segments.push({ type: "text", lines: [] })
+        }
+        segments[segments.length - 1].lines.push(line)
+        i++
+      }
+    }
+
+    // ── ابنِ HTML النهائي ─────────────────────────────────────────────────────
+    let html = ""
+    for (const seg of segments) {
+      if (seg.type === "text") {
+        html += processPlainText(seg.lines.join("\n"))
+      } else {
+        // بطاقة اتصال
+        const svgPin   = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`
+        const svgPhone = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.62 3.38 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 6 6l.94-.94a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 21.73 16z"/></svg>`
+        const svgMail  = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>`
+        const rowsHtml = seg.lines.map(r => {
+          const firstChar = [...r][0]
+          const content = r.replace(firstChar, "").trim()
+          let svgIcon = svgPin
+          let rowClass = "gm-contact-row"
+          if (firstChar === "📞") { svgIcon = svgPhone; rowClass += " phone" }
+          else if (firstChar === "📧") { svgIcon = svgMail; rowClass += " email" }
+          const formatted = content
+            .replace(/(00964\d{7,12})/g, n => `<a class="gm-phone-link" href="tel:${n}">${n}</a>`)
+            .replace(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g, e => `<a class="gm-email-link" href="mailto:${e}">${e}</a>`)
+          return `<div class="${rowClass}"><span class="ci-icon">${svgIcon}</span><span>${formatted}</span></div>`
+        }).join("")
+        html += `<div class="gm-contact-block"><div class="gm-contact-name">${seg.name}</div>${rowsHtml}</div>`
+      }
+    }
 
     // ── عرض المصادر بشكل احترافي ─────────────────────────────────────────────
     if (sourceLines.length > 0) {
@@ -603,13 +662,71 @@ export default function ChatWidget({
         }
 
         /* Markdown */
-        .gm-bubble strong  { font-weight: 600; }
+        .gm-bubble strong  { font-weight: 700; color: #1a1a1a; }
+        .gm-bubble em      { font-style: normal; color: #444; }
         .gm-bubble a       { color: #b1bd52; text-decoration: underline; }
+        .gm-phone-link     { color: #1a1a1a !important; font-weight: 700; text-decoration: none !important; font-family: monospace; font-size: 14px; direction: ltr; display: inline-block; background: #ffffff; padding: 2px 8px; border-radius: 5px; }
+        .gm-phone-link:hover { background: #dadce0; }
+        .gm-email-link     { color: #1a1a1a !important; font-weight: 700; text-decoration: none !important; font-size: 14px; background: #e8eaed; padding: 2px 8px; border-radius: 5px; }
+        .gm-email-link:hover { background: #dadce0; }
+        .gm-root.dark .gm-phone-link,
+        .gm-root.dark .gm-email-link { color: #e8eaed !important; background: #3c4043; }
+        .gm-root.dark .gm-phone-link:hover,
+        .gm-root.dark .gm-email-link:hover { background: #4a4f52; }
         .gm-bubble ol,
         .gm-bubble ul      { margin: 8px 0; padding-right: 20px; }
         .gm-bubble li      { margin: 5px 0; }
         .gm-bubble h2,
-        .gm-bubble h3      { font-size: 15.5px; font-weight: 600; margin: 12px 0 5px; }
+        .gm-bubble h3      { font-size: 15.5px; font-weight: 700; margin: 14px 0 6px; color: #1a1a1a; }
+        .gm-bubble br + br { display: block; margin-top: 4px; content: ""; }
+
+        /* بلوكات معلومات الاتصال */
+        .gm-contact-block {
+          background: #f8f9fa;
+          border: 1px solid #e8eaed;
+          border-radius: 12px;
+          padding: 14px 16px;
+          margin: 10px 0;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .gm-contact-block .gm-contact-name {
+          font-weight: 700;
+          font-size: 15px;
+          color: #1a1a1a;
+          margin-bottom: 4px;
+        }
+        .gm-contact-block .gm-contact-row {
+          font-size: 14.5px;
+          color: #3c4043;
+          display: flex;
+          align-items: flex-start;
+          gap: 6px;
+          direction: rtl;
+        }
+        .gm-contact-block .gm-contact-row .ci-icon { flex-shrink: 0; opacity: 0.55; margin-top: 1px; }
+        .gm-contact-block .gm-contact-row.phone .ci-icon,
+        .gm-contact-block .gm-contact-row.email .ci-icon { opacity: 0.65; }
+        .gm-contact-block .gm-contact-row a {
+          color: #1a1a1a;
+          font-weight: 700;
+          text-decoration: none !important;
+          font-family: monospace;
+          font-size: 14px;
+          direction: ltr;
+          display: inline-block;
+          background: #e8eaed;
+          padding: 2px 8px;
+          border-radius: 5px;
+        }
+        .gm-contact-block .gm-contact-row a:hover { background: #dadce0; }
+        .gm-root.dark .gm-contact-block {
+          background: #2d2d2d;
+          border-color: #404040;
+        }
+        .gm-root.dark .gm-contact-block .gm-contact-name { color: #e8eaed; }
+        .gm-root.dark .gm-contact-block .gm-contact-row  { color: #bdc1c6; }
 
         /* ═══════════════════════════════════════════════
            TYPING DOTS
