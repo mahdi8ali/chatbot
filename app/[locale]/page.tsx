@@ -106,29 +106,6 @@ export default function HomePage() {
           to   { transform: translateY(0);    opacity: 1; }
         }
 
-        .ai-close-btn {
-          position: fixed;
-          top: 16px;
-          left: 20px;
-          z-index: 300;
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          border: none;
-          background: rgba(255,255,255,0.12);
-          color: white;
-          font-size: 18px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: background 0.2s;
-          backdrop-filter: blur(8px);
-        }
-
-        .ai-close-btn:hover {
-          background: rgba(255,255,255,0.22);
-        }
       `}</style>
 
       {/* Top Bar */}
@@ -142,12 +119,12 @@ export default function HomePage() {
       {/* AI Fullscreen Overlay */}
       {aiOpen && (
         <div className="ai-overlay">
-          <button className="ai-close-btn" onClick={() => setAiOpen(false)}>✕</button>
           <div className="ai-panel">
             <ChatWidget
               apiEndpoint="/api/chat/site"
               title="المساعد الذكي"
               subtitle="شبكة الكفيل"
+              onClose={() => setAiOpen(false)}
             />
           </div>
         </div>

@@ -41,12 +41,14 @@ interface ChatWidgetProps {
   apiEndpoint?: string
   title?: string
   subtitle?: string
+  onClose?: () => void
 }
 
 export default function ChatWidget({
   apiEndpoint = "/api/chat/site",
   title = "مساعدك في المشاريع",
-  subtitle = "اسأل عن مشاريع العتبة العباسية"
+  subtitle = "اسأل عن مشاريع العتبة العباسية",
+  onClose
 }: ChatWidgetProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
@@ -55,6 +57,29 @@ export default function ChatWidget({
   const [showWelcome, setShowWelcome] = useState(true)
   const [loadingPhase, setLoadingPhase] = useState(0)
   const [phaseVisible, setPhaseVisible] = useState(true)
+  const [darkMode, setDarkMode] = useState(false)
+
+  const welcomePhrases = [
+    { prefix: "اطرح",    word: "تساؤلك" },
+    { prefix: "اكتشف",  word: "مشاريعنا" },
+    { prefix: "تعرّف على", word: "إنجازاتنا" },
+    { prefix: "ابحث في", word: "أرشيفنا" },
+    { prefix: "استفسر عن", word: "مبادراتنا" },
+  ]
+  const [welcomeIdx, setWelcomeIdx] = useState(0)
+  const [welcomeVisible, setWelcomeVisible] = useState(true)
+
+  useEffect(() => {
+    if (messages.length > 0) return
+    const interval = setInterval(() => {
+      setWelcomeVisible(false)
+      setTimeout(() => {
+        setWelcomeIdx(i => (i + 1) % welcomePhrases.length)
+        setWelcomeVisible(true)
+      }, 400)
+    }, 2800)
+    return () => clearInterval(interval)
+  }, [messages.length])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -197,13 +222,17 @@ export default function ChatWidget({
   const renderMarkdown = (text: string) => {
     if (!text) return ""
 
-    // ── افصل سطور المصادر (📖 أو 🎬) عن نص الجواب ──────────────────────────
+    // ── افصل سطور المصادر (📖 أو 🎬 أو 🔗) عن نص الجواب ─────────────────────
     const lines = text.split("\n")
     const sourceLines: string[] = []
     const bodyLines: string[] = []
     for (const line of lines) {
-      if (/^[📖🎬]/.test(line.trim())) {
-        sourceLines.push(line.trim())
+      const t = line.trim()
+      if (/^[📖🎬]/.test(t)) {
+        sourceLines.push(t)
+      } else if (/^🔗\s*\[/.test(t) || /^\*\(تاريخ/.test(t)) {
+        // روابط 🔗 المنفردة → تُعامَل كمصدر
+        sourceLines.push(t)
       } else {
         bodyLines.push(line)
       }
@@ -241,37 +270,50 @@ export default function ChatWidget({
         const linkMatch = line.match(/\[([^\]]+)\]\(([^)]+)\)/)
         const url    = linkMatch ? linkMatch[2] : ""
         const label  = linkMatch ? linkMatch[1] : ""
+
+        // تجاهل الكارد إذا لم يكن هناك رابط حقيقي
+        if (!url || url === "" || url === "#") return ""
         // نص المصدر (بدون الإيموجي والرابط)
         const meta = line
           .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "")
-          .replace(/[📖🎬]/g, "")
+          .replace(/[📖🎬🔗]/g, "")
           .replace(/\*([^*]*)\*/g, "$1")
           .replace(/—\s*🔗\s*$/, "")
           .replace(/—\s*$/, "")
           .trim()
 
+        // العنوان الرئيسي للكارد: meta إن وُجد، وإلا label
+        const cardTitle = meta || label
+
         const isVideo = line.startsWith("🎬")
+        const isLink  = line.startsWith("🔗")
 
         // SVG inline من Lucide — احترافي ونظيف
-        const svgBook = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>`
+        const svgBook  = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>`
         const svgVideo = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`
+        const svgLinkOut = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`
         const svgArrow = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`
-        const iconSvg = isVideo ? svgVideo : svgBook
+        const iconSvg = isVideo ? svgVideo : isLink ? svgLinkOut : svgBook
 
         return `<a class="gm-source-card" href="${url}" target="_blank" rel="noopener noreferrer">
           <span class="gm-source-right">
             <span class="gm-source-svg-icon">${iconSvg}</span>
-            <span class="gm-source-text">${label}</span>
+            <span class="gm-source-info">
+              <span class="gm-source-title">${cardTitle}</span>
+              ${meta ? `<span class="gm-source-action">${label}</span>` : ""}
+            </span>
           </span>
           <span class="gm-source-arrow">${svgArrow}</span>
         </a>`
       }).join("")
 
-      html += `<div class="gm-sources-block">
-        <div class="gm-sources-sep"></div>
-        <div class="gm-sources-title">المصادر</div>
-        <div class="gm-sources-list">${sourcesHtml}</div>
-      </div>`
+      if (sourcesHtml.trim()) {
+        html += `<div class="gm-sources-block">
+          <div class="gm-sources-sep"></div>
+          <div class="gm-sources-title">المصادر</div>
+          <div class="gm-sources-list">${sourcesHtml}</div>
+        </div>`
+      }
     }
 
     return html
@@ -300,11 +342,15 @@ export default function ChatWidget({
           flex-direction: column;
           height: 100%;
           width: 100%;
-          background: #ffffff;
+          background: #f0f4f9;
           direction: rtl;
           font-family: 'Google Sans', 'Segoe UI', system-ui, sans-serif;
           color: #1f1f1f;
           overflow: hidden;
+          transition: background 0.4s ease;
+        }
+        .gm-root.chat-active {
+          background: #ffffff;
         }
 
         /* ═══════════════════════════════════════════════
@@ -316,9 +362,9 @@ export default function ChatWidget({
           justify-content: space-between;
           padding: 0 24px;
           height: 56px;
-          border-bottom: 1px solid #e8eaed;
+          border-bottom: 1px solid #dde3ea;
           flex-shrink: 0;
-          background: #fff;
+          background: inherit;
         }
 
         .gm-logo {
@@ -334,7 +380,7 @@ export default function ChatWidget({
           width: 26px;
           height: 26px;
           border-radius: 50%;
-          background: #4e6833;
+          background: #b1bd52;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -348,12 +394,15 @@ export default function ChatWidget({
           background: transparent;
           border: 1px solid #dadce0;
           color: #5f6368;
-          padding: 7px 16px;
+          padding: 7px 14px;
           border-radius: 20px;
           font-size: 13px;
           cursor: pointer;
           transition: background 0.15s, border-color 0.15s;
           font-family: inherit;
+          display: flex;
+          align-items: center;
+          gap: 6px;
         }
         .gm-clear-btn:hover {
           background: #f8f9fa;
@@ -377,11 +426,10 @@ export default function ChatWidget({
           inset: 0;
           display: flex;
           flex-direction: column;
-          align-items: center;
+          align-items: flex-end;
           justify-content: flex-start;
-          padding: 64px 24px 0;
-          text-align: center;
-          gap: 20px;
+          padding: 9% 48px 0;
+          text-align: right;
           opacity: 1;
           transition: opacity 0.35s ease, transform 0.35s ease;
           pointer-events: all;
@@ -393,44 +441,74 @@ export default function ChatWidget({
           pointer-events: none;
         }
 
-        .gm-welcome-title {
-          font-size: 26px;
+        .gm-welcome-greeting {
+          font-size: 17px;
           font-weight: 400;
+          color: #5f6368;
+          margin: 0 0 4px;
+          display: block;
+        }
+
+        .gm-welcome-title {
+          font-size: 38px;
+          font-weight: 500;
           color: #1f1f1f;
           margin: 0;
-          line-height: 1.45;
+          line-height: 1.3;
         }
         .gm-welcome-title em {
           font-style: normal;
           font-weight: 600;
-          color: #4e6833;
+          color: #b1bd52;
         }
 
+        .gm-welcome-head {
+          text-align: right;
+          margin-bottom: 20px;
+          padding: 0 4px;
+        }
+
+        .gm-welcome-title span.rotating {
+          display: inline-block;
+          transition: opacity 0.35s ease, transform 0.35s ease;
+          opacity: 1;
+          transform: translateY(0);
+        }
+        .gm-welcome-title span.rotating.hidden {
+          opacity: 0;
+          transform: translateY(-14px);
+        }
+
+        /* chips below input */
         .gm-chips {
           display: flex;
           flex-wrap: wrap;
-          gap: 10px;
+          gap: 8px;
           justify-content: center;
-          max-width: 640px;
+          max-width: 680px;
+          margin-top: 14px;
+          animation: msgIn 0.3s ease;
         }
 
         .gm-chip {
           background: #fff;
-          border: 1px solid #dadce0;
+          border: 1px solid #dde3ea;
           color: #3c4043;
-          padding: 9px 18px;
+          padding: 9px 16px;
           border-radius: 20px;
-          font-size: 13.5px;
+          font-size: 13px;
           cursor: pointer;
-          transition: background 0.15s, border-color 0.15s;
+          transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
           font-family: inherit;
           display: flex;
           align-items: center;
           gap: 6px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.06);
         }
         .gm-chip:hover {
           background: #f8f9fa;
-          border-color: #9aa0a6;
+          border-color: #bdc1c6;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.1);
         }
 
         /* ═══════════════════════════════════════════════
@@ -493,7 +571,7 @@ export default function ChatWidget({
           border-radius: 50%;
           border: 1px solid #dadce0;
           background: #fff;
-          color: #4e6833;
+          color: #b1bd52;
           font-size: 9px;
           font-weight: 700;
           display: flex;
@@ -526,7 +604,7 @@ export default function ChatWidget({
 
         /* Markdown */
         .gm-bubble strong  { font-weight: 600; }
-        .gm-bubble a       { color: #4e6833; text-decoration: underline; }
+        .gm-bubble a       { color: #b1bd52; text-decoration: underline; }
         .gm-bubble ol,
         .gm-bubble ul      { margin: 8px 0; padding-right: 20px; }
         .gm-bubble li      { margin: 5px 0; }
@@ -620,6 +698,7 @@ export default function ChatWidget({
           align-items: center;
           gap: 9px;
           overflow: hidden;
+          flex: 1;
         }
 
         .gm-source-svg-icon {
@@ -629,13 +708,27 @@ export default function ChatWidget({
           color: #5f6368;
         }
 
-        .gm-source-text {
+        .gm-source-info {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          overflow: hidden;
+        }
+
+        .gm-source-title {
           font-size: 13.5px;
           color: #3c4043;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
           font-weight: 400;
+          line-height: 1.4;
+        }
+
+        .gm-source-action {
+          font-size: 11.5px;
+          color: #9aa0a6;
+          line-height: 1.3;
         }
 
         .gm-source-arrow {
@@ -653,7 +746,7 @@ export default function ChatWidget({
           display: inline-block;
           width: 2px;
           height: 1em;
-          background: #4e6833;
+          background: #b1bd52;
           margin-right: 2px;
           vertical-align: text-bottom;
           animation: blink 0.7s step-end infinite;
@@ -661,6 +754,11 @@ export default function ChatWidget({
         @keyframes blink {
           0%, 100% { opacity: 1; }
           50%       { opacity: 0; }
+        }
+
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
         }
 
         /* ═══════════════════════════════════════════════
@@ -677,23 +775,25 @@ export default function ChatWidget({
           transition: bottom 0.48s cubic-bezier(0.4, 0, 0.2, 1);
           z-index: 10;
         }
-        /* الوضع الأولي: أسفل المنتصف عمودياً */
+        /* الوضع الأولي: وسط الصفحة */
         .gm-input-zone.centered {
-          bottom: 28%;
+          bottom: 30%;
         }
 
         .gm-input-box {
           display: flex;
-          align-items: flex-end;
+          align-items: center;
           background: #fff;
-          border: 1px solid #dadce0;
+          border: 1px solid #dde3ea;
           border-radius: 24px;
           padding: 12px 16px;
           gap: 10px;
-          transition: border-color 0.2s;
+          transition: border-color 0.2s, box-shadow 0.2s;
         }
+
         .gm-input-box:focus-within {
           border-color: #9aa0a6;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.12);
         }
 
         .gm-textarea {
@@ -717,7 +817,7 @@ export default function ChatWidget({
           height: 36px;
           border-radius: 50%;
           border: none;
-          background: #4e6833;
+          background: #b1bd52;
           color: #fff;
           font-size: 17px;
           cursor: pointer;
@@ -728,7 +828,7 @@ export default function ChatWidget({
           transition: background 0.2s, opacity 0.2s;
           line-height: 1;
         }
-        .gm-send-btn:hover:not(:disabled) { background: #3a5025; }
+        .gm-send-btn:hover:not(:disabled) { background: #9aaa3e; }
         .gm-send-btn:disabled {
           background: #e8eaed;
           color: #9aa0a6;
@@ -737,13 +837,143 @@ export default function ChatWidget({
 
         .gm-hint {
           text-align: center;
-          font-size: 11px;
-          color: #9aa0a6;
+          font-size: 12px;
+          color: #6e757c;
           margin-top: 9px;
+        }
+
+        /* ── Dark mode toggle button ── */
+        .gm-dark-btn {
+          width: 34px;
+          height: 34px;
+          border-radius: 50%;
+          border: 1px solid #dadce0;
+          background: transparent;
+          color: #5f6368;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          transition: background 0.15s, border-color 0.15s, color 0.15s;
+        }
+        .gm-dark-btn:hover {
+          background: #f1f3f4;
+          border-color: #bdc1c6;
+        }
+
+        /* ═══════════════════════════════════════════════
+           DARK MODE
+        ═══════════════════════════════════════════════ */
+        .gm-root.dark {
+          background: #131314;
+          color: #e3e3e3;
+        }
+        .gm-root.dark .gm-header {
+          background: #1e1f20;
+          border-color: #3c3f43;
+        }
+        .gm-root.dark .gm-logo {
+          color: #e3e3e3;
+        }
+        .gm-root.dark .gm-clear-btn {
+          border-color: #3c3f43;
+          color: #9aa0a6;
+        }
+        .gm-root.dark .gm-clear-btn:hover {
+          background: #2d2e30;
+          border-color: #5f6368;
+        }
+        .gm-root.dark .gm-dark-btn {
+          border-color: #3c3f43;
+          color: #9aa0a6;
+        }
+        .gm-root.dark .gm-dark-btn:hover {
+          background: #2d2e30;
+          border-color: #5f6368;
+        }
+        .gm-root.dark .gm-welcome-greeting {
+          color: #9aa0a6;
+        }
+        .gm-root.dark .gm-welcome-title {
+          color: #e3e3e3;
+        }
+        .gm-root.dark .gm-chip {
+          background: #2d2e30;
+          border-color: #3c3f43;
+          color: #bdc1c6;
+          box-shadow: none;
+        }
+        .gm-root.dark .gm-chip:hover {
+          background: #2d2e30;
+          border-color: #5f6368;
+        }
+        .gm-root.dark .gm-row.user .gm-bubble {
+          background: #2d2e30;
+          border-color: #3c3f43;
+          color: #e3e3e3;
+        }
+        .gm-root.dark .gm-row.assistant .gm-bubble {
+          color: #e3e3e3;
+        }
+        .gm-root.dark .gm-bubble a {
+          color: #b1bd52;
+        }
+        .gm-root.dark .gm-ai-dot {
+          background: #1e1f20;
+          border-color: #3c3f43;
+          color: #b1bd52;
+        }
+        .gm-root.dark .gm-input-box {
+          background: #1e1f20;
+          border-color: #3c3f43;
+        }
+        .gm-root.dark .gm-input-box:focus-within {
+          border-color: #5f6368;
+        }
+        .gm-root.dark .gm-textarea {
+          color: #e3e3e3;
+        }
+        .gm-root.dark .gm-textarea::placeholder {
+          color: #5f6368;
+        }
+        .gm-root.dark .gm-send-btn:disabled {
+          background: #2d2e30;
+          color: #5f6368;
+        }
+        .gm-root.dark .gm-sources-sep {
+          background: #3c3f43;
+        }
+        .gm-root.dark .gm-source-card {
+          background: #1e1f20;
+          border-color: #3c3f43;
+          color: #bdc1c6;
+        }
+        .gm-root.dark .gm-source-card:hover {
+          background: #2d2e30;
+          border-color: #5f6368;
+        }
+        .gm-root.dark .gm-source-title {
+          color: #e3e3e3;
+        }
+        .gm-root.dark .gm-source-svg-icon {
+          color: #b1bd52;
+        }
+        .gm-root.dark .gm-source-arrow {
+          color: #5f6368;
+        }
+        .gm-root.dark .gm-loading-text {
+          color: #9aa0a6;
+        }
+        .gm-root.dark .gm-hint {
+          color: #5f6368;
+        }
+        .gm-root.dark .gm-messages-layer::-webkit-scrollbar-thumb {
+          background: #3c3f43;
         }
       `}</style>
 
-      <div className="gm-root">
+      <div className={`gm-root${darkMode ? " dark" : ""}${hasMessages ? " chat-active" : ""}`}>
 
         {/* ── Header ── */}
         <div className="gm-header">
@@ -751,28 +981,49 @@ export default function ChatWidget({
             <div className="gm-logo-dot">AI</div>
             <span>المساعد الذكي — شبكة الكفيل</span>
           </div>
-          {hasMessages && (
-            <button className="gm-clear-btn" onClick={clearChat}>محادثة جديدة</button>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <button className="gm-clear-btn" onClick={clearChat}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+              </svg>
+              محادثة جديدة
+            </button>
+            <button
+              className="gm-dark-btn"
+              onClick={() => setDarkMode(d => !d)}
+              title={darkMode ? "الوضع الفاتح" : "الوضع الداكن"}
+            >
+              {darkMode ? (
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="5"/>
+                  <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                  <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                </svg>
+              ) : (
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                </svg>
+              )}
+            </button>
+            {onClose && (
+              <button
+                className="gm-dark-btn"
+                onClick={onClose}
+                title="إغلاق"
+              >
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
-
-        {/* ── Stage ── */}
         <div className="gm-stage">
 
-          {/* Welcome Layer */}
-          <div className={`gm-welcome-layer${hasMessages ? " out" : ""}`}>
-            <h1 className="gm-welcome-title">
-              مرحباً،<br />كيف يمكنني <em>مساعدتك</em> اليوم؟
-            </h1>
-            <div className="gm-chips">
-              {quickButtons.map((btn, i) => (
-                <button key={i} className="gm-chip" onClick={() => sendMessage(btn.query)}>
-                  <span>{btn.emoji}</span>
-                  {btn.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* Welcome Layer — empty placeholder */}
+          <div className={`gm-welcome-layer${hasMessages ? " out" : ""}`} />
 
           {/* Messages Layer */}
           <div className={`gm-messages-layer${hasMessages ? " in" : ""}`}>
@@ -813,6 +1064,17 @@ export default function ChatWidget({
 
           {/* Input Zone — slides from center to bottom */}
           <div className={`gm-input-zone${!hasMessages ? " centered" : ""}`}>
+            {!hasMessages && (
+              <div className="gm-welcome-head">
+                <span className="gm-welcome-greeting">السلام عليكم،</span>
+                <h1 className="gm-welcome-title">
+                  <span className={`rotating${welcomeVisible ? "" : " hidden"}`}>
+                    {welcomePhrases[welcomeIdx].prefix}{" "}
+                    <em>{welcomePhrases[welcomeIdx].word}</em>
+                  </span>
+                </h1>
+              </div>
+            )}
             <div className="gm-input-box">
               <textarea
                 ref={textareaRef}
@@ -833,10 +1095,30 @@ export default function ChatWidget({
                 onClick={() => sendMessage()}
                 disabled={!input.trim() || isLoading}
               >
-                {isLoading ? "⟳" : "↑"}
+                {isLoading ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: "spin 1s linear infinite" }}>
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style={{ transform: "scaleX(-1)" }}>
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                  </svg>
+                )}
               </button>
             </div>
-            <div className="gm-hint">Enter للإرسال &nbsp;·&nbsp; Shift+Enter لسطر جديد</div>
+            {hasMessages && (
+              <div className="gm-hint" style={{ marginTop: "10px" }}>المساعد الذكي هو نموذج ذكاء اصطناعي وقد ينتج عنه أخطاء.</div>
+            )}
+            {!hasMessages && (
+              <div className="gm-chips">
+                {quickButtons.map((btn, i) => (
+                  <button key={i} className="gm-chip" onClick={() => sendMessage(btn.query)}>
+                    <span>{btn.emoji}</span>
+                    {btn.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
         </div>
