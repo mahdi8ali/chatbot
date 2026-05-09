@@ -438,23 +438,32 @@ export default function ChatWidget({
           display: flex;
           align-items: center;
           gap: 10px;
-          font-size: 16px;
-          font-weight: 500;
+          font-size: 15px;
+          font-weight: 600;
           color: #1f1f1f;
         }
 
-        .gm-logo-dot {
-          width: 26px;
-          height: 26px;
-          border-radius: 50%;
-          background: #b1bd52;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 10px;
-          font-weight: 700;
-          color: #fff;
+        .gm-logo img {
+          width: 28px;
+          height: 28px;
+          object-fit: contain;
           flex-shrink: 0;
+        }
+
+        .gm-logo-sub {
+          display: flex;
+          flex-direction: column;
+          line-height: 1.2;
+        }
+        .gm-logo-sub .gm-logo-title {
+          font-size: 14px;
+          font-weight: 700;
+          color: #1f1f1f;
+        }
+        .gm-logo-sub .gm-logo-subtitle {
+          font-size: 10.5px;
+          font-weight: 400;
+          color: #80868b;
         }
 
         .gm-clear-btn {
@@ -632,11 +641,20 @@ export default function ChatWidget({
           align-items: flex-start;
         }
 
+        @property --gm-spin-angle {
+          syntax: '<angle>';
+          initial-value: 0deg;
+          inherits: false;
+        }
+        @keyframes gm-border-spin {
+          to { --gm-spin-angle: 360deg; }
+        }
+
         .gm-ai-dot {
           width: 28px;
           height: 28px;
           border-radius: 50%;
-          border: 1px solid #dadce0;
+          border: 1.5px solid #dadce0;
           background: #fff;
           color: #b1bd52;
           font-size: 9px;
@@ -646,6 +664,16 @@ export default function ChatWidget({
           justify-content: center;
           flex-shrink: 0;
           margin-top: 3px;
+          overflow: hidden;
+          padding: 4px;
+          transition: border-color 0.3s;
+        }
+        .gm-ai-dot.loading {
+          border: 2px solid transparent;
+          background:
+            linear-gradient(#fff, #fff) padding-box,
+            conic-gradient(from var(--gm-spin-angle), #b1bd52 0%, #8fc9f5 40%, #b1bd52 70%, #e0e8a0 90%, #b1bd52 100%) border-box;
+          animation: gm-border-spin 1.4s linear infinite;
         }
 
         /* فقاعة المستخدم */
@@ -1007,6 +1035,8 @@ export default function ChatWidget({
         .gm-root.dark .gm-logo {
           color: #e3e3e3;
         }
+        .gm-root.dark .gm-logo-sub .gm-logo-title { color: #e3e3e3; }
+        .gm-root.dark .gm-logo-sub .gm-logo-subtitle { color: #7a7f84; }
         .gm-root.dark .gm-clear-btn {
           border-color: #3c3f43;
           color: #9aa0a6;
@@ -1054,6 +1084,11 @@ export default function ChatWidget({
           background: #1e1f20;
           border-color: #3c3f43;
           color: #b1bd52;
+        }
+        .gm-root.dark .gm-ai-dot.loading {
+          background:
+            linear-gradient(#1e1f20, #1e1f20) padding-box,
+            conic-gradient(from var(--gm-spin-angle), #b1bd52 0%, #8fc9f5 40%, #b1bd52 70%, #e0e8a0 90%, #b1bd52 100%) border-box;
         }
         .gm-root.dark .gm-input-box {
           background: #1e1f20;
@@ -1109,8 +1144,11 @@ export default function ChatWidget({
         {/* ── Header ── */}
         <div className="gm-header">
           <div className="gm-logo">
-            <div className="gm-logo-dot">AI</div>
-            <span>المساعد الذكي — شبكة الكفيل</span>
+            <img src={darkMode ? "/kaf-dark.svg" : "/kaf.svg"} alt="الكفيل" />
+            <div className="gm-logo-sub">
+              <span className="gm-logo-title">المساعد الذكي</span>
+              <span className="gm-logo-subtitle">وضع الذكاء الاصطناعي</span>
+            </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <button className="gm-clear-btn" onClick={clearChat}>
@@ -1162,7 +1200,9 @@ export default function ChatWidget({
               {messages.map((msg, i) => (
                 <div key={i} className={`gm-row ${msg.role}`}>
                   {msg.role === "assistant" && (
-                    <div className="gm-ai-dot">AI</div>
+                    <div className={`gm-ai-dot${isStreaming && i === messages.length - 1 ? " loading" : ""}`}>
+                      <img src={darkMode ? "/kaf-dark.svg" : "/kaf.svg"} alt="" style={{ width: "18px", height: "18px", objectFit: "contain" }} />
+                    </div>
                   )}
                   <div
                     className="gm-bubble"
@@ -1179,7 +1219,9 @@ export default function ChatWidget({
 
               {isLoading && !isStreaming && (
                 <div className="gm-row assistant">
-                  <div className="gm-ai-dot">AI</div>
+                  <div className="gm-ai-dot loading">
+                    <img src={darkMode ? "/kaf-dark.svg" : "/kaf.svg"} alt="" style={{ width: "18px", height: "18px", objectFit: "contain" }} />
+                  </div>
                   <div className="gm-bubble">
                     <span
                       className={`gm-loading-text${phaseVisible ? " visible" : ""}`}
