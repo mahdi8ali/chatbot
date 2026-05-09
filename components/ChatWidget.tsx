@@ -1261,7 +1261,6 @@ export default function ChatWidget({
                 onKeyDown={handleKeyDown}
                 placeholder="اسألني أي شيء…"
                 rows={1}
-                disabled={isLoading}
               />
               <button
                 className={`gm-send-btn${isLoading ? " stop" : ""}`}
