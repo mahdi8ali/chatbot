@@ -54,6 +54,7 @@ export default function ChatWidget({
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isStreaming, setIsStreaming] = useState(false)
+  const abortControllerRef = useRef<AbortController | null>(null)
   const [showWelcome, setShowWelcome] = useState(true)
   const [loadingPhase, setLoadingPhase] = useState(0)
   const [phaseVisible, setPhaseVisible] = useState(true)
@@ -128,10 +129,14 @@ export default function ChatWidget({
     setMessages(newMessages)
     setIsLoading(true)
 
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
     try {
       const response = await fetch(apiEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           messages: newMessages,
           temperature: 0.7,
@@ -192,15 +197,18 @@ export default function ChatWidget({
         ...newMessages,
         { role: "assistant", content: botReply }
       ])
-    } catch (err) {
-      setMessages([
-        ...newMessages,
-        {
-          role: "assistant",
-          content: "⚠️ حدث خطأ في الاتصال. حاول مرة أخرى."
-        }
-      ])
+    } catch (err: any) {
+      if (err?.name !== "AbortError") {
+        setMessages([
+          ...newMessages,
+          {
+            role: "assistant",
+            content: "⚠️ حدث خطأ في الاتصال. حاول مرة أخرى."
+          }
+        ])
+      }
     } finally {
+      abortControllerRef.current = null
       setIsLoading(false)
       setIsStreaming(false)
       textareaRef.current?.focus()
@@ -946,6 +954,12 @@ export default function ChatWidget({
           line-height: 1;
         }
         .gm-send-btn:hover:not(:disabled) { background: #9aaa3e; }
+        .gm-send-btn.stop {
+          background: #f1f3f4;
+          color: #444;
+          border: 2px solid #dadce0;
+        }
+        .gm-send-btn.stop:hover { background: #e8eaed; }
         .gm-send-btn:disabled {
           background: #e8eaed;
           color: #9aa0a6;
@@ -1208,13 +1222,20 @@ export default function ChatWidget({
                 disabled={isLoading}
               />
               <button
-                className="gm-send-btn"
-                onClick={() => sendMessage()}
-                disabled={!input.trim() || isLoading}
+                className={`gm-send-btn${isLoading ? " stop" : ""}`}
+                onClick={() => {
+                  if (isLoading) {
+                    abortControllerRef.current?.abort()
+                  } else {
+                    sendMessage()
+                  }
+                }}
+                disabled={!isLoading && !input.trim()}
+                title={isLoading ? "إيقاف" : "إرسال"}
               >
                 {isLoading ? (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: "spin 1s linear infinite" }}>
-                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="4" y="4" width="16" height="16" rx="2"/>
                   </svg>
                 ) : (
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style={{ transform: "scaleX(-1)" }}>
