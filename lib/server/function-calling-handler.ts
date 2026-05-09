@@ -275,14 +275,8 @@ async function processToolCall(
 export async function handleToolCalls(
   toolCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[]
 ): Promise<ChatCompletionMessageParam[]> {
-  const toolResponses: ChatCompletionMessageParam[] = []
-
-  // معالجة كل أداة
-  for (const toolCall of toolCalls) {
-    const response = await processToolCall(toolCall)
-    toolResponses.push(response)
-  }
-
+  // تنفيذ جميع الأدوات بالتوازي (بدل التسلسل) لتقليل وقت الانتظار
+  const toolResponses = await Promise.all(toolCalls.map(tc => processToolCall(tc)))
   return toolResponses
 }
 
@@ -328,7 +322,8 @@ export async function resolveToolCalls(
       model,
       messages: currentMessages,
       tools,
-      tool_choice: (toolsWereCalled ? "auto" : "required") as OpenAI.Chat.Completions.ChatCompletionToolChoiceOption,  // أول call: أجبر على استدعاء أداة دائماً
+      tool_choice: (toolsWereCalled ? "auto" : "required") as OpenAI.Chat.Completions.ChatCompletionToolChoiceOption,
+      parallel_tool_calls: true,
       temperature: 0.5,
       max_tokens: 200  // اختيار الأداة فقط — لا يحتاج أكثر
     })
