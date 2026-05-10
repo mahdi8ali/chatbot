@@ -15,6 +15,7 @@ import {
   type AllowedToolName
 } from "./site-tools-definitions"
 import { executeToolByName, type APICallResult } from "./site-api-service"
+import { searchProjectsDB, getProjectDetails } from "./projects-db-service"
 import { getFallbackResponse } from "./system-prompts"
 import {
   isEmptyAPIResponse,
@@ -161,7 +162,28 @@ async function processToolCall(
     }
   }
 
-  // تنفيذ الأداة
+  // ─── الأدوات المرتبطة بقاعدة المشاريع المنفصلة (early return) ────────
+  if (toolName === "search_projects_db") {
+    const dbResult = await searchProjectsDB({
+      query: args.query || "",
+      section: args.section,
+      limit: args.limit
+    })
+    const content = (!dbResult.success || !dbResult.data?.results?.length)
+      ? JSON.stringify({ success: false, message: "لا توجد مشاريع مطابقة لبحثك في قاعدة بيانات المشاريع." })
+      : JSON.stringify({ success: true, total_found: dbResult.data.total_found, results: dbResult.data.results })
+    return { tool_call_id: toolCallId, role: "tool", content }
+  }
+
+  if (toolName === "get_project_details") {
+    const detailResult = await getProjectDetails(Number(args.project_id))
+    const content = (!detailResult.success || !detailResult.data)
+      ? JSON.stringify({ success: false, message: detailResult.error || "المشروع غير موجود." })
+      : JSON.stringify({ success: true, project: detailResult.data })
+    return { tool_call_id: toolCallId, role: "tool", content }
+  }
+
+  // تنفيذ الأداة عبر site-api-service
   const result: APICallResult = await executeToolByName(
     toolName as AllowedToolName,
     args
@@ -248,6 +270,7 @@ async function processToolCall(
 
     content = lines.join("\n").trim() || "لم يتم العثور على معلومات اتصال."
     console.log(`[Function Call] search_contacts formatted:\n${content}`)
+
   } else {
     const cleanedResult = cleanResultForGPT(result)
     content = JSON.stringify(cleanedResult)

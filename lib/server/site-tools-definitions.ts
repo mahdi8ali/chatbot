@@ -160,6 +160,58 @@ export const TOOL_SEARCH_CONTACTS: ChatCompletionTool = {
 }
 
 /**
+ * أداة البحث في قاعدة بيانات المشاريع المنفصلة (alkafeel_projects)
+ */
+export const TOOL_SEARCH_PROJECTS_DB: ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "search_projects_db",
+    description: "بحث في قاعدة بيانات مشاريع العتبة العباسية المنفصلة (358 مشروع). استخدمها عندما يسأل المستخدم عن مشروع محدد أو قطاع معين مثل: طبي، تعليمي، زراعي، إنشائي، ثقافي... ترجع قائمة مشاريع مع ملخص ورقم ID لكل مشروع.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "كلمات البحث بالعربية — اسم المشروع أو موضوعه"
+        },
+        section: {
+          type: "string",
+          description: "اسم قطاع المشاريع للتصفية (اختياري) — مثال: طبية، تعليمية، زراعية، إنشائية، ثقافية"
+        },
+        limit: {
+          type: "number",
+          description: "عدد النتائج (افتراضي: 8، أقصى: 20)",
+          minimum: 1,
+          maximum: 20
+        }
+      },
+      required: ["query"]
+    }
+  }
+}
+
+/**
+ * أداة جلب تفاصيل مشروع واحد من قاعدة المشاريع
+ */
+export const TOOL_GET_PROJECT_DETAILS: ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "get_project_details",
+    description: "جلب التفاصيل الكاملة لمشروع واحد من قاعدة بيانات المشاريع باستخدام الـ ID. استخدمها عندما يريد المستخدم معرفة تفاصيل أعمق عن مشروع محدد بعد نتائج search_projects_db.",
+    parameters: {
+      type: "object",
+      properties: {
+        project_id: {
+          type: "number",
+          description: "رقم المشروع (ID) الذي ترجعه أداة search_projects_db"
+        }
+      },
+      required: ["project_id"]
+    }
+  }
+}
+
+/**
  * قائمة جميع الأدوات المتاحة
  */
 export const ALL_SITE_TOOLS: ChatCompletionTool[] = [
@@ -168,7 +220,9 @@ export const ALL_SITE_TOOLS: ChatCompletionTool[] = [
   TOOL_FILTER_PROJECTS,
   TOOL_GET_LATEST_PROJECTS,
   TOOL_GET_STATISTICS,
-  TOOL_SEARCH_CONTACTS
+  TOOL_SEARCH_CONTACTS,
+  TOOL_SEARCH_PROJECTS_DB,
+  TOOL_GET_PROJECT_DETAILS
 ]
 
 /**
@@ -180,7 +234,9 @@ export const ALLOWED_TOOL_NAMES = [
   "filter_projects",
   "get_latest_projects",
   "get_statistics",
-  "search_contacts"
+  "search_contacts",
+  "search_projects_db",
+  "get_project_details"
 ] as const
 
 export type AllowedToolName = (typeof ALLOWED_TOOL_NAMES)[number]
