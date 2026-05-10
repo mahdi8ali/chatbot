@@ -145,13 +145,13 @@ export const TOOL_SEARCH_CONTACTS: ChatCompletionTool = {
   type: "function",
   function: {
     name: "search_contacts",
-    description: "البحث في معلومات الاتصال بأقسام العتبة العباسية: أرقام الهاتف، الإيميلات، العناوين. استخدم هذه الأداة عندما يسأل المستخدم عن كيفية التواصل مع جهة أو قسم معين.",
+    description: "البحث في معلومات الاتصال بأقسام العتبة العباسية: أرقام الهاتف، الإيميلات، العناوين. استخدم هذه الأداة في أي من الحالات التالية: (1) يسأل المستخدم عن رقم هاتف أي جهة أو قسم، (2) يسأل 'كيف أتصل' أو 'ما رقم' أو 'أريد التواصل' أو 'عنوان'، (3) يذكر اسم أي قسم أو جهة تابعة للعتبة العباسية ويريد التواصل معها حتى لو لم يذكر كلمة 'رقم' أو 'هاتف' صراحةً.",
     parameters: {
       type: "object",
       properties: {
         query: {
           type: "string",
-          description: "اسم القسم أو الجهة للبحث عنها (مثال: الأمانة العامة، متحف الكفيل، دار الكفيل)"
+          description: "اسم القسم أو الجهة للبحث عنها (مثال: قسم الإمام المهدي، الأمانة العامة، مستشفى الكفيل، جامعة الكفيل)"
         }
       },
       required: []
@@ -212,6 +212,27 @@ export const TOOL_GET_PROJECT_DETAILS: ChatCompletionTool = {
 }
 
 /**
+ * أداة جلب صورة مشروع — تُستخدم فقط عند طلب المستخدم الصريح للصور
+ */
+export const TOOL_GET_PROJECT_IMAGE: ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "get_project_image",
+    description: "جلب صورة مشروع معين من قاعدة بيانات المشاريع. استخدم هذه الأداة فقط عندما يطلب المستخدم صراحةً رؤية صورة المشروع أو صوره.",
+    parameters: {
+      type: "object",
+      properties: {
+        project_id: {
+          type: "number",
+          description: "رقم المشروع (ID) الذي تريد صورته"
+        }
+      },
+      required: ["project_id"]
+    }
+  }
+}
+
+/**
  * قائمة جميع الأدوات المتاحة
  */
 export const ALL_SITE_TOOLS: ChatCompletionTool[] = [
@@ -222,7 +243,8 @@ export const ALL_SITE_TOOLS: ChatCompletionTool[] = [
   TOOL_GET_STATISTICS,
   TOOL_SEARCH_CONTACTS,
   TOOL_SEARCH_PROJECTS_DB,
-  TOOL_GET_PROJECT_DETAILS
+  TOOL_GET_PROJECT_DETAILS,
+  TOOL_GET_PROJECT_IMAGE
 ]
 
 /**
@@ -236,7 +258,8 @@ export const ALLOWED_TOOL_NAMES = [
   "get_statistics",
   "search_contacts",
   "search_projects_db",
-  "get_project_details"
+  "get_project_details",
+  "get_project_image"
 ] as const
 
 export type AllowedToolName = (typeof ALLOWED_TOOL_NAMES)[number]

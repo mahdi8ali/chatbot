@@ -15,7 +15,7 @@ import {
   type AllowedToolName
 } from "./site-tools-definitions"
 import { executeToolByName, type APICallResult } from "./site-api-service"
-import { searchProjectsDB, getProjectDetails } from "./projects-db-service"
+import { searchProjectsDB, getProjectDetails, getProjectImage } from "./projects-db-service"
 import { getFallbackResponse } from "./system-prompts"
 import {
   isEmptyAPIResponse,
@@ -183,6 +183,14 @@ async function processToolCall(
     return { tool_call_id: toolCallId, role: "tool", content }
   }
 
+  if (toolName === "get_project_image") {
+    const imgResult = await getProjectImage(Number(args.project_id))
+    const content = (!imgResult.success || !imgResult.data)
+      ? JSON.stringify({ success: false, message: imgResult.error || "لا توجد صورة لهذا المشروع." })
+      : JSON.stringify({ success: true, name: imgResult.data.name, image_url: imgResult.data.image_url })
+    return { tool_call_id: toolCallId, role: "tool", content }
+  }
+
   // تنفيذ الأداة عبر site-api-service
   const result: APICallResult = await executeToolByName(
     toolName as AllowedToolName,
@@ -245,7 +253,7 @@ async function processToolCall(
   // لأداة search_contacts: أعد نصاً منسقاً مسبقاً بدل JSON خام
   if (toolName === "search_contacts" && result.success && result.data?.contacts) {
     const { contacts, general } = result.data as {
-      contacts: Array<{ department: string; address: string | null; phones: string[]; email: string | null }>
+      contacts: Array<{ department: string; name: string | null; title: string | null; address: string | null; phones: string[]; email: string | null }>
       general: { phones: string[]; emails: string[] }
       total: number
     }
@@ -253,11 +261,27 @@ async function processToolCall(
     const lines: string[] = []
 
     if (contacts.length > 0) {
+      // تجميع حسب القسم
+      const deptMap = new Map<string, typeof contacts>()
       for (const c of contacts) {
-        lines.push(`**${c.department}**`)
-        if (c.address) lines.push(`📍 ${c.address}`)
-        if (c.phones && c.phones.length > 0) lines.push(`📞 ${c.phones.join("، ")}`)
-        if (c.email) lines.push(`📧 ${c.email}`)
+        if (!deptMap.has(c.department)) deptMap.set(c.department, [])
+        deptMap.get(c.department)!.push(c)
+      }
+
+      for (const [dept, items] of Array.from(deptMap)) {
+        lines.push(`**${dept}**`)
+        for (const c of items) {
+          const label = c.name || c.title || null
+          if (c.phones && c.phones.length > 0) {
+            for (const phone of c.phones) {
+              lines.push(label ? `- ${label}: ${phone}` : `- 📞 ${phone}`)
+            }
+          }
+          if (c.email) lines.push(`- 📧 ${c.email}`)
+        }
+        // العنوان من أول عنصر في القسم
+        const addr = items[0]?.address
+        if (addr) lines.push(`- 📍 ${addr}`)
         lines.push("")
       }
     }

@@ -685,11 +685,17 @@ export async function searchContacts(query?: string): Promise<APICallResult> {
 
     // فلترة بالبحث إن وُجد
     if (query && query.trim()) {
-      const q = query.trim().toLowerCase().replace(/[ًٌٍَُِّْ]/g, "")
+      const normalize = (s: string) => s
+        .toLowerCase()
+        .replace(/[ًٌٍَُِّْ]/g, "")           // حركات
+        .replace(/[أإآ]/g, "ا")               // توحيد الألف
+        .replace(/[ةه]/g, "ه")               // توحيد التاء المربوطة
+        .replace(/[ىي]/g, "ي")               // توحيد الياء
+
+      const words = normalize(query).split(/\s+/).filter(w => w.length > 1)
       divisions = divisions.filter(d => {
-        const text = [d.title, d.address, ...d.contacts.map((c: any) => c.name + " " + (c.title || ""))]
-          .join(" ").toLowerCase().replace(/[ًٌٍَُِّْ]/g, "")
-        return text.includes(q)
+        const text = normalize([d.title, d.address, ...d.contacts.map((c: any) => c.name + " " + (c.title || ""))].join(" "))
+        return words.some(w => text.includes(w))
       })
     }
 
@@ -700,7 +706,9 @@ export async function searchContacts(query?: string): Promise<APICallResult> {
         for (const c of div.contacts) {
           contacts.push({
             department: div.title,
-            address: c.title || div.address || null,
+            name: c.name || null,
+            title: c.title || null,
+            address: div.address || null,
             phones: c.phones,
             email: c.email || null
           })
@@ -708,6 +716,8 @@ export async function searchContacts(query?: string): Promise<APICallResult> {
       } else {
         contacts.push({
           department: div.title,
+          name: null,
+          title: null,
           address: div.address || null,
           phones: [],
           email: null

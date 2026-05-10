@@ -18,6 +18,11 @@ function sectionUrl(sectionId: number | null): string | null {
   return sectionId ? `${PROJECTS_BASE}/project?section_id=${sectionId}` : null
 }
 
+function imageUrl(img: string | null): string | null {
+  if (!img) return null
+  return `${PROJECTS_BASE}/uploads/projects/${img}`
+}
+
 // ─── Pool منفصل لقاعدة المشاريع ───────────────────────────────────────────
 let projectsPool: Pool | null = null
 
@@ -284,6 +289,32 @@ export async function getProjectDetails(projectId: number): Promise<{
     }
   } catch (err: any) {
     console.error("[projects-db] getProjectDetails error:", err)
+    return { success: false, error: err.message }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+//  get_project_image
+//  يُجلب صورة مشروع واحد فقط عند الطلب الصريح من المستخدم
+// ──────────────────────────────────────────────────────────────────────────
+export async function getProjectImage(projectId: number): Promise<{
+  success: boolean
+  data?: { id: number; name: string; image_url: string }
+  error?: string
+}> {
+  try {
+    const db = getProjectsPool()
+    const [rows] = await db.execute<RowDataPacket[]>(
+      `SELECT id, name, img FROM projects WHERE id = ? AND deleted_at IS NULL LIMIT 1`,
+      [projectId]
+    )
+    if (!rows.length) return { success: false, error: "المشروع غير موجود" }
+    const row = rows[0] as any
+    const url = imageUrl(row.img)
+    if (!url) return { success: false, error: "لا توجد صورة لهذا المشروع" }
+    return { success: true, data: { id: row.id, name: row.name, image_url: url } }
+  } catch (err: any) {
+    console.error("[projects-db] getProjectImage error:", err)
     return { success: false, error: err.message }
   }
 }

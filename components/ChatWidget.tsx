@@ -254,6 +254,10 @@ export default function ChatWidget({
         .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
         .replace(/\*([^*]+)\*/g, "<em>$1</em>")
         .replace(
+          /!\[([^\]]*)\]\(([^)]+)\)/g,
+          '<img class="gm-project-img" src="$2" alt="$1" loading="lazy" />'
+        )
+        .replace(
           /\[([^\]]+)\]\(([^)]+)\)/g,
           '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
         )
@@ -716,6 +720,19 @@ export default function ChatWidget({
         .gm-bubble h3      { font-size: 15.5px; font-weight: 700; margin: 14px 0 6px; color: #1a1a1a; }
         .gm-bubble br + br { display: block; margin-top: 4px; content: ""; }
 
+        /* صور المشاريع */
+        .gm-project-img {
+          width: 100%;
+          max-width: 340px;
+          height: auto;
+          border-radius: 10px;
+          margin: 10px 0;
+          display: block;
+          border: 1px solid #e8eaed;
+          object-fit: cover;
+        }
+        .gm-root.dark .gm-project-img { border-color: #3c3f43; }
+
         /* بلوكات معلومات الاتصال */
         .gm-contact-block {
           background: #f8f9fa;
@@ -1076,6 +1093,10 @@ export default function ChatWidget({
         }
         .gm-root.dark .gm-row.assistant .gm-bubble {
           color: #e3e3e3;
+        }
+        .gm-root.dark .gm-row.assistant .gm-bubble strong,
+        .gm-root.dark .gm-row.assistant .gm-bubble b {
+          color: #ffffff;
         }
         .gm-root.dark .gm-bubble a {
           color: #b1bd52;
