@@ -67,11 +67,14 @@ function normalizeArabic(text: string): string {
  */
 export function searchFAQ(query: string): FAQEntry | null {
   const q = normalizeArabic(query)
-  if (!q) return null
+  if (!q || q.length < 5) return null  // تجاهل الرسائل القصيرة جداً (أقل من 5 أحرف)
 
   for (const entry of FAQ_ENTRIES) {
     for (const pattern of entry.patterns) {
-      if (q.includes(normalizeArabic(pattern))) {
+      const p = normalizeArabic(pattern)
+      // التطابق يجب أن يكون كلمة مستقلة (word boundary) وليس جزءاً من كلمة أخرى
+      const regex = new RegExp(`(^|\\s)${p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|\\s)`)
+      if (regex.test(q)) {
         return entry
       }
     }
