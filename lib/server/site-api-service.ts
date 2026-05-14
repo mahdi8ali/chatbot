@@ -745,6 +745,29 @@ export async function searchContacts(query?: string): Promise<APICallResult> {
   }
 }
 
+/**
+ * جلب أقسام مكتبة الفيديو
+ */
+export async function getVideoSections(): Promise<APICallResult> {
+  const pool = await getPool()
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT id, JSON_UNQUOTE(JSON_EXTRACT(title, '$.ar')) as title_ar, request
+       FROM video_sections
+       WHERE deleted_at IS NULL
+       ORDER BY sort`
+    )
+    const sections = (rows as any[]).map(r => ({
+      id: r.id,
+      title: r.title_ar,
+      url: `https://alkafeel.net/media/${r.request}`
+    }))
+    return { success: true, data: { sections, total: sections.length } }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
 export async function executeToolByName(
   toolName: AllowedToolName,
   args: Record<string, any>
@@ -772,6 +795,9 @@ export async function executeToolByName(
 
       case "search_contacts":
         return await searchContacts(args.query)
+
+      case "get_video_sections":
+        return await getVideoSections()
 
       default:
         return {

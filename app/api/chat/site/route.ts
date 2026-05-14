@@ -266,6 +266,8 @@ export async function POST(request: Request) {
       }))
     ]
 
+
+
     // ===== Streaming Function Calling =====
     if (use_tools) {
       console.log(`[Chat API] Streaming FC (${sanitizedMessages.length} msgs)`)

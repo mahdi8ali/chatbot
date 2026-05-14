@@ -16,7 +16,7 @@ export const TOOL_SEARCH_PROJECTS: ChatCompletionTool = {
   type: "function",
   function: {
     name: "search_projects",
-    description: "بحث في قاعدة بيانات شبكة الكفيل الشاملة: الأخبار، سيرة أبي الفضل العباس (ع)، التاريخ، ومكتبة الفيديو. النتائج مرتبة بالتطابق ومصنّفة بحقل source_label.",
+    description: "بحث في قاعدة بيانات شبكة الكفيل: الأخبار، سيرة أبي الفضل العباس (ع)، التاريخ، ومكتبة الفيديو. استخدم هذه الأداة لأي سؤال عن محتوى الموقع، بما في ذلك: أسماء المسؤولين والمناصب الإدارية (رئيس قسم، مدير، أمين عام)، الفعاليات، الإنجازات، والأخبار بشكل عام. النتائج مصنّفة بحقل source_label.",
     parameters: {
       type: "object",
       properties: {
@@ -145,7 +145,7 @@ export const TOOL_SEARCH_CONTACTS: ChatCompletionTool = {
   type: "function",
   function: {
     name: "search_contacts",
-    description: "البحث في معلومات الاتصال بأقسام العتبة العباسية: أرقام الهاتف، الإيميلات، العناوين. استخدم هذه الأداة في أي من الحالات التالية: (1) يسأل المستخدم عن رقم هاتف أي جهة أو قسم، (2) يسأل 'كيف أتصل' أو 'ما رقم' أو 'أريد التواصل' أو 'عنوان'، (3) يذكر اسم أي قسم أو جهة تابعة للعتبة العباسية ويريد التواصل معها حتى لو لم يذكر كلمة 'رقم' أو 'هاتف' صراحةً.",
+    description: "أرقام الهاتف والإيميلات والعناوين لأقسام العتبة العباسية فقط. لا تحتوي على أسماء الأشخاص أو المسؤولين. استخدم هذه الأداة ONLY عندما يطلب المستخدم صراحةً رقم هاتف أو إيميل أو عنوان، أو يقول 'كيف أتصل' أو 'أريد التواصل'. لا تستخدمها للإجابة على 'من هو' أو 'ما اسم' أي شخص.",
     parameters: {
       type: "object",
       properties: {
@@ -233,6 +233,22 @@ export const TOOL_GET_PROJECT_IMAGE: ChatCompletionTool = {
 }
 
 /**
+ * أداة الحصول على أقسام مكتبة الفيديو
+ */
+export const TOOL_GET_VIDEO_SECTIONS: ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "get_video_sections",
+    description: "قائمة جميع أقسام مكتبة الفيديو في شبكة الكفيل (43 قسماً). استخدم هذه الأداة عندما يسأل المستخدم عن: أقسام الفيديو، ما هي تصنيفات الفيديو، ماذا يوجد في مكتبة الفيديو، أو يريد تصفح محتوى الفيديو.",
+    parameters: {
+      type: "object",
+      properties: {},
+      required: []
+    }
+  }
+}
+
+/**
  * قائمة جميع الأدوات المتاحة
  */
 export const ALL_SITE_TOOLS: ChatCompletionTool[] = [
@@ -244,7 +260,8 @@ export const ALL_SITE_TOOLS: ChatCompletionTool[] = [
   TOOL_SEARCH_CONTACTS,
   TOOL_SEARCH_PROJECTS_DB,
   TOOL_GET_PROJECT_DETAILS,
-  TOOL_GET_PROJECT_IMAGE
+  TOOL_GET_PROJECT_IMAGE,
+  TOOL_GET_VIDEO_SECTIONS
 ]
 
 /**
@@ -259,7 +276,8 @@ export const ALLOWED_TOOL_NAMES = [
   "search_contacts",
   "search_projects_db",
   "get_project_details",
-  "get_project_image"
+  "get_project_image",
+  "get_video_sections"
 ] as const
 
 export type AllowedToolName = (typeof ALLOWED_TOOL_NAMES)[number]
