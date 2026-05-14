@@ -396,8 +396,6 @@ export default function ChatWidget({
     { emoji: "🕌", label: "مشاريع الصحن ومقترباته", query: "أعرض لي مشاريع الصحن ومقترباته" },
     { emoji: "🏥", label: "المشاريع الطبية", query: "أعرض لي المشاريع الطبية" },
     { emoji: "📈", label: "المشاريع التنموية", query: "أعرض لي المشاريع التنموية" },
-    { emoji: "🔧", label: "خدمات عامة", query: "أعرض لي خدمات عامة" },
-    { emoji: "🏛️", label: "تشكيلات إدارية", query: "أعرض لي تشكيلات إدارية" }
   ]
 
   const hasMessages = messages.length > 0
@@ -945,9 +943,10 @@ export default function ChatWidget({
           transition: bottom 0.48s cubic-bezier(0.4, 0, 0.2, 1);
           z-index: 10;
         }
-        /* الوضع الأولي: وسط الصفحة */
+        /* الوضع الأولي: أسفل العنوان مباشرة */
         .gm-input-zone.centered {
-          bottom: 30%;
+          bottom: auto;
+          top: 220px;
         }
 
         .gm-input-box {

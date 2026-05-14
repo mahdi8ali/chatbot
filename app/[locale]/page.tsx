@@ -44,8 +44,8 @@ export default function HomePage() {
           gap: 8px;
           padding: 8px 18px;
           border-radius: 999px;
-          border: 1.5px solid rgba(255,255,255,0.25);
-          background: rgba(255,255,255,0.1);
+          border: 1.5px solid rgba(255,255,255,0.15);
+          background: rgba(0,0,0,0.75);
           color: white;
           font-size: 14px;
           font-weight: 600;
@@ -63,17 +63,18 @@ export default function HomePage() {
         }
 
         .ai-btn-icon {
-          width: 22px;
-          height: 22px;
-          background: linear-gradient(135deg, #4f8ef7, #a855f7);
-          border-radius: 50%;
+          width: 26px;
+          height: 26px;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 11px;
-          font-weight: 800;
-          color: white;
           flex-shrink: 0;
+        }
+        .ai-btn-icon img {
+          width: 26px;
+          height: 26px;
+          object-fit: contain;
+          filter: brightness(0) invert(1);
         }
 
         /* ── AI Overlay ── */
@@ -111,7 +112,7 @@ export default function HomePage() {
       {/* Top Bar */}
       <div className="top-bar">
         <button className="ai-btn" onClick={() => setAiOpen(true)}>
-          <span className="ai-btn-icon">AI</span>
+          <span className="ai-btn-icon"><img src="/kaf.svg" alt="" /></span>
           <span>المساعد الذكي</span>
         </button>
       </div>
