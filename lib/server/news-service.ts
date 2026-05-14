@@ -1,0 +1,179 @@
+/**
+ * news-service.ts — بيانات الأخبار من جدول `news`
+ * يغطي: search_news, get_latest, filter_categories, get_statistics
+ */
+
+import { RowDataPacket } from "mysql2/promise"
+import {
+  APICallResult, getPool,
+  stripHtml, excerpt, normalizeArabicWord, consonantSkeleton, buildTitleExtras
+} from "./db"
+
+// ── Interface ────────────────────────────────────────────────────────────────
+interface NewsRow extends RowDataPacket {
+  id: number
+  title: string
+  title_2: string | null
+  image: string | null
+  content: string | null
+  views: number
+  photo_comment: string | null
+  active: number
+  category_id: number | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function getNewsUrl(id: number): string {
+  return `https://alkafeel.net/news/index.php?id=${id}`
+}
+
+function mapNewsToItem(row: NewsRow) {
+  const categoryName = row.category_id ? `تصنيف ${row.category_id}` : "أخبار شبكة الكفيل"
+  const strippedContent = stripHtml(row.content || "")
+  const description = strippedContent.length <= 2500 ? strippedContent : strippedContent.slice(0, 2500) + "..."
+
+  const rawText = [
+    row.title,
+    row.title_2,
+    description,
+    strippedContent.slice(0, 250),
+    row.photo_comment,
+    categoryName
+  ]
+    .filter(Boolean)
+    .join(" ")
+
+  const searchText = rawText.toLowerCase().replace(/[ًٌٍَُِّْ]/g, "")
+
+  const titleRoots = (row.title || "")
+    .split(/\s+/)
+    .map(normalizeArabicWord)
+    .filter(w => w.length >= 3)
+    .join(" ")
+
+  const titleSkeletons = (row.title || "")
+    .split(/\s+/)
+    .map(w => consonantSkeleton(normalizeArabicWord(w)))
+    .filter(w => w.length >= 3)
+    .join(" ")
+
+  const titleSkeletonText = titleSkeletons.toLowerCase()
+  const searchTextWithRoots = searchText + " " + titleRoots.toLowerCase() + " " + titleSkeletonText
+
+  return {
+    id: row.id,
+    name: row.title,
+    description,
+    sections: [{ name: categoryName }],
+    properties: [
+      row.title_2 ? { name: "العنوان الفرعي", value: row.title_2 } : null,
+      row.photo_comment ? { name: "تعليق الصورة", value: row.photo_comment } : null,
+      row.created_at ? { name: "تاريخ النشر", value: row.created_at } : null,
+      { name: "عدد المشاهدات", value: String(row.views || 0) },
+      row.image ? { name: "الصورة", value: `https://www.alkafeel.net/alkafeelnews/up3/${row.image}` } : null
+    ].filter(Boolean),
+    url: getNewsUrl(row.id),
+    searchText: searchTextWithRoots,
+    titleSkeletonText,
+    created_at: row.created_at || null,
+    created_at_ts: row.created_at ? new Date(row.created_at).getTime() : 0
+  }
+}
+
+// ── Cache ────────────────────────────────────────────────────────────────────
+let newsCache: any[] | null = null
+let newsCacheTime = 0
+const CACHE_DURATION = 10 * 60 * 1000
+
+export async function getAllNews(): Promise<APICallResult> {
+  const now = Date.now()
+  if (newsCache && now - newsCacheTime < CACHE_DURATION) {
+    return { success: true, data: newsCache }
+  }
+  try {
+    const db = getPool()
+    const t0 = Date.now()
+    const [rows] = await db.query<NewsRow[]>(
+      `SELECT id, title, title_2, image, content, views, photo_comment, active, category_id, created_at, updated_at
+       FROM news
+       WHERE active = 1 AND deleted_at IS NULL`
+    )
+    console.log(`[Timing] DB query: ${Date.now() - t0}ms (${rows.length} rows)`)
+    const t1 = Date.now()
+    const mapped = rows.map(mapNewsToItem)
+    console.log(`[Timing] mapNewsToItem: ${Date.now() - t1}ms`)
+    newsCache = mapped
+    newsCacheTime = now
+    return { success: true, data: mapped }
+  } catch (error: any) {
+    console.error("[DB Error - getAllNews]:", error?.message || error)
+    return { success: false, error: "تعذر الوصول إلى قاعدة البيانات. تأكد من إعدادات DB في .env.local" }
+  }
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
+export async function siteListCategories(include_counts: boolean = false): Promise<APICallResult> {
+  const allNews = await getAllNews()
+  if (!allNews.success) return allNews
+
+  const data = (allNews.data as any[]) || []
+  const counts = new Map<string, number>()
+  for (const item of data) {
+    for (const s of item.sections || []) {
+      const name = s.name || "غير مصنف"
+      counts.set(name, (counts.get(name) || 0) + 1)
+    }
+  }
+  const categories = Array.from(counts.entries()).map(([name, count], idx) => ({
+    id: idx + 1,
+    name,
+    ...(include_counts && { count })
+  }))
+  return { success: true, data: { categories, total_categories: categories.length } }
+}
+
+export async function siteGetLatest(limit: number = 2, section?: string): Promise<APICallResult> {
+  const allNews = await getAllNews()
+  if (!allNews.success) return allNews
+
+  let data = [...((allNews.data as any[]) || [])]
+  if (section) {
+    data = data.filter(item =>
+      (item.sections || []).some((s: any) =>
+        String(s.name || "").toLowerCase().includes(section.toLowerCase())
+      )
+    )
+  }
+  data.sort((a, b) => {
+    const tA = new Date(a.properties?.find((p: any) => p.name === "تاريخ النشر")?.value || 0).getTime()
+    const tB = new Date(b.properties?.find((p: any) => p.name === "تاريخ النشر")?.value || 0).getTime()
+    return tB - tA
+  })
+  const projects = data.slice(0, Math.min(Math.max(limit || 5, 1), 20))
+  return { success: true, data: { projects, total: projects.length, limit } }
+}
+
+export async function siteGetStatistics(): Promise<APICallResult> {
+  const allNews = await getAllNews()
+  if (!allNews.success) return allNews
+
+  const data = (allNews.data as any[]) || []
+  const sectionCounts = new Map<string, number>()
+  for (const item of data) {
+    for (const s of item.sections || []) {
+      const name = s.name || "غير مصنف"
+      sectionCounts.set(name, (sectionCounts.get(name) || 0) + 1)
+    }
+  }
+  const top_sections = Array.from(sectionCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([section, count]) => ({ section, count }))
+  return {
+    success: true,
+    data: { total_projects: data.length, top_sections, sections_count: sectionCounts.size }
+  }
+}
