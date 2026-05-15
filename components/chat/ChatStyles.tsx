@@ -152,6 +152,34 @@ export default function ChatStyles() {
       .gm-source-action { font-size: 11.5px; color: #9aa0a6; line-height: 1.3; }
       .gm-source-arrow { display: flex; align-items: center; flex-shrink: 0; color: #bdc1c6; margin-right: 10px; }
 
+      /* بطاقة الفيديو (بدون mp4 مباشر) */
+      .gm-video-card { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid #e8eaed; border-radius: 10px; text-decoration: none !important; background: #fff; color: inherit; transition: background 0.15s, border-color 0.15s, transform 0.15s; direction: rtl; overflow: hidden; }
+      .gm-video-card:hover { background: #f8f9fa; border-color: #b1bd52; transform: translateY(-1px); }
+      .gm-video-thumb { width: 72px; height: 48px; min-width: 72px; background: linear-gradient(135deg, #1a1a2e 0%, #2d4a6b 50%, #1a3a1a 100%); border-radius: 7px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; flex-shrink: 0; }
+      .gm-video-play-icon { display: flex; align-items: center; justify-content: center; z-index: 1; }
+      .gm-video-duration-badge { position: absolute; bottom: 3px; left: 3px; background: rgba(0,0,0,0.7); color: #fff; font-size: 9px; padding: 1px 4px; border-radius: 3px; }
+      .gm-video-info { display: flex; flex-direction: column; gap: 4px; flex: 1; overflow: hidden; }
+      .gm-video-title { font-size: 13.5px; font-weight: 500; color: #1f1f1f; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+      .gm-video-cta { font-size: 11.5px; color: #b1bd52; font-weight: 500; }
+
+      /* مشغّل الفيديو المدمج (mp4 مباشر) */
+      .gm-video-player { border: 1px solid #e8eaed; border-radius: 12px; overflow: hidden; background: #000; margin: 4px 0; box-shadow: 0 2px 12px rgba(0,0,0,0.12); }
+      .gm-video-title-bar { display: flex; align-items: center; gap: 8px; padding: 9px 14px 9px; background: #f8f9fa; color: #1f1f1f; font-size: 13px; font-weight: 500; direction: rtl; line-height: 1.4; border-bottom: 1px solid #e8eaed; margin-bottom: 6px; }
+      .gm-video-title-bar svg { flex-shrink: 0; }
+      .gm-video-wrapper { position: relative; cursor: pointer; background: #000; overflow: hidden; aspect-ratio: 16/9; }
+      .gm-poster-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s ease; }
+      .gm-video-wrapper:hover .gm-poster-img { transform: scale(1.03); }
+      .gm-play-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.22); transition: background 0.25s; }
+      .gm-video-wrapper:hover .gm-play-overlay { background: rgba(0,0,0,0.38); }
+      .gm-play-btn { width: 62px; height: 62px; background: rgba(0,0,0,0.65); border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: transform 0.2s ease, background 0.2s ease; box-shadow: 0 4px 16px rgba(0,0,0,0.45); backdrop-filter: blur(4px); }
+      .gm-play-btn svg { width: 26px; height: 26px; margin-right: -3px; }
+      .gm-video-wrapper:hover .gm-play-btn { transform: scale(1.12); background: rgba(177,189,82,0.88); }
+      .gm-video-el { display: none; position: absolute; inset: 0; width: 100%; height: 100%; background: #000; }
+      .gm-video-wrapper.gm-playing { cursor: default; }
+      .gm-video-wrapper.gm-playing .gm-poster-img,
+      .gm-video-wrapper.gm-playing .gm-play-overlay { display: none; }
+      .gm-video-wrapper.gm-playing .gm-video-el { display: block; }
+
       .gm-cursor { display: inline-block; width: 2px; height: 1em; background: #b1bd52; margin-right: 2px; vertical-align: text-bottom; animation: blink 0.7s step-end infinite; }
       @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
       @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -210,6 +238,11 @@ export default function ChatStyles() {
       .gm-root.dark .gm-source-title { color: #e3e3e3; }
       .gm-root.dark .gm-source-svg-icon { color: #b1bd52; }
       .gm-root.dark .gm-source-arrow { color: #5f6368; }
+      .gm-root.dark .gm-video-card { background: #1e1f20; border-color: #3c3f43; }
+      .gm-root.dark .gm-video-card:hover { background: #2d2e30; border-color: #b1bd52; }
+      .gm-root.dark .gm-video-title { color: #e3e3e3; }
+      .gm-root.dark .gm-video-player { border-color: #3c3f43; }
+      .gm-root.dark .gm-video-title-bar { background: #1e2023; color: #e3e3e3; border-bottom-color: #3c3f43; }
       .gm-root.dark .gm-loading-text { color: #9aa0a6; }
       .gm-root.dark .gm-hint { color: #5f6368; }
       .gm-root.dark .gm-messages-layer::-webkit-scrollbar-thumb { background: #3c3f43; }

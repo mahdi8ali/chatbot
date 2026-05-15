@@ -66,6 +66,8 @@ function cleanProject(project: any, detailed: boolean = false): any {
     url: "url" in project
       ? project.url
       : (project.id ? `https://alkafeel.net/news/index.php?id=${project.id}` : null),
+    // رابط mp4 مباشر للفيديو (إن وُجد)
+    ...(project.video_url ? { video_url: project.video_url } : {}),
     // حقل المصدر لمعرفة أصل النتيجة
     ...(project.source_label ? { source_label: project.source_label } : {}),
     ...(project.length ? { length: project.length } : {}),

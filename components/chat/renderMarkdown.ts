@@ -53,6 +53,61 @@ function buildContactCard(seg: { lines: string[]; name?: string }): string {
 
 function buildSourcesBlock(sourceLines: string[]): string {
   const sourcesHtml = sourceLines.map(line => {
+    const isVideo = line.startsWith("🎬")
+    const isLink  = line.startsWith("🔗")
+
+    // فيديو مع رابط mp4 مباشر → مشغّل مدمج
+    if (isVideo) {
+      // البحث عن أي رابط mp4 في السطر بغض النظر عن الصيغة
+      const mp4UrlMatch = line.match(/https?:\/\/[^\s"'<>)\]]+\.mp4/i)
+      if (mp4UrlMatch) {
+        const mp4Url = mp4UrlMatch[0]
+        // استخراج العنوان: كل النص بين 🎬 وأول [ (بداية الرابط)
+        const beforeLink = line.split('[')[0]  // كل ما قبل أول [
+        const title = beforeLink
+          .replace(/^🎬/, '')
+          .replace(/\*/g, '')
+          .replace(/\s*—.*$/, '')
+          .trim() || 'فيديو'
+        // استخراج request_id من رابط MP4 وبناء رابط الصورة المصغّرة
+        const reqMatch = mp4Url.match(/\/videos\/([a-f0-9]+)\/[a-f0-9]+\.mp4$/i)
+        const posterUrl = reqMatch
+          ? `https://alkafeel.net/videos/mcroped/765/${reqMatch[1]}.jpg`
+          : ''
+        const svgPlay = `<svg viewBox="0 0 24 24" fill="white"><polygon points="6,3 20,12 6,21"/></svg>`
+        return `<div class="gm-video-player">
+          <div class="gm-video-title-bar">${svgVideo} <span>${title}</span></div>
+          <div class="gm-video-wrapper" onclick="var w=this;var v=w.querySelector('video');w.classList.add('gm-playing');v.controls=true;v.play();">
+            ${posterUrl ? `<img class="gm-poster-img" src="${posterUrl}" alt="" />` : `<div style="aspect-ratio:16/9;background:#111"></div>`}
+            <div class="gm-play-overlay">
+              <div class="gm-play-btn">${svgPlay}</div>
+            </div>
+            <video class="gm-video-el" preload="none" src="${mp4Url}">
+              <a href="${mp4Url}" target="_blank" rel="noopener noreferrer">مشاهدة الفيديو</a>
+            </video>
+          </div>
+        </div>`
+      }
+      // فيديو بدون mp4 مباشر → بطاقة بصرية
+      const linkMatch = line.match(/\[([^\]]+)\]\(([^)]+)\)/)
+      const url   = linkMatch ? linkMatch[2] : ""
+      const label = linkMatch ? linkMatch[1] : ""
+      if (!url) return ""
+      const meta = line.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "").replace(/[📖🎬🔗]/g, "").replace(/\*([^*]*)\*/g, "$1").replace(/—\s*🔗\s*$/, "").replace(/—\s*$/, "").trim()
+      const cardTitle = meta || label
+      const svgPlay = `<svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="12" fill="rgba(255,255,255,0.15)"/><polygon points="9.5,7 18,12 9.5,17" fill="white"/></svg>`
+      return `<a class="gm-video-card" href="${url}" target="_blank" rel="noopener noreferrer">
+        <div class="gm-video-thumb">
+          <div class="gm-video-play-icon">${svgPlay}</div>
+          <div class="gm-video-duration-badge">فيديو</div>
+        </div>
+        <div class="gm-video-info">
+          <span class="gm-video-title">${cardTitle}</span>
+          <span class="gm-video-cta">▶ مشاهدة الفيديو على موقع الكفيل</span>
+        </div>
+      </a>`
+    }
+
     const linkMatch = line.match(/\[([^\]]+)\]\(([^)]+)\)/)
     const url   = linkMatch ? linkMatch[2] : ""
     const label = linkMatch ? linkMatch[1] : ""
@@ -65,9 +120,7 @@ function buildSourcesBlock(sourceLines: string[]): string {
       .replace(/—\s*$/, "")
       .trim()
     const cardTitle = meta || label
-    const isVideo = line.startsWith("🎬")
-    const isLink  = line.startsWith("🔗")
-    const iconSvg = isVideo ? svgVideo : isLink ? svgLinkOut : svgBook
+    const iconSvg = isLink ? svgLinkOut : svgBook
     return `<a class="gm-source-card" href="${url}" target="_blank" rel="noopener noreferrer">
       <span class="gm-source-right">
         <span class="gm-source-svg-icon">${iconSvg}</span>

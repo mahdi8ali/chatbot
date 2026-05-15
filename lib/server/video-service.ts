@@ -9,6 +9,7 @@ interface VideoFileRow extends RowDataPacket {
   id: number
   title: string        // JSON
   caption: string | null  // JSON
+  image: string | null  // filename of thumbnail
   request: string
   video_section_id: number | null
   length: string | null
@@ -26,6 +27,13 @@ function mapVideoToItem(row: VideoFileRow) {
   const { roots, skeletons } = buildTitleExtras(titleAr)
   const searchText = [titleAr, captionAr, sectionTitleAr].filter(Boolean).join(" ").toLowerCase().replace(/[ًٌٍَُِّْ]/g, "")
     + " " + roots + " " + skeletons
+  const videoUrl = row.request
+    ? `https://static1.alkafeel.net/videos/${row.request}/${row.request}.mp4`
+    : null
+  const thumbnailUrl = row.image
+    ? `https://static1.alkafeel.net/uploads/videos/${row.image}`
+    : null
+
   return {
     id: `video_${row.id}`,
     name: titleAr || "",
@@ -34,6 +42,8 @@ function mapVideoToItem(row: VideoFileRow) {
     source_label: sectionTitleAr ? `مكتبة الفيديو — ${sectionTitleAr}` : "مكتبة الفيديو",
     sections: [{ name: sectionTitleAr || "الفيديو" }],
     url: row.request ? `https://alkafeel.net/media/${row.request}?lang=ar` : `https://alkafeel.net/media?lang=ar` as string | null,
+    video_url: videoUrl,
+    thumbnail_url: thumbnailUrl,
     length: row.length || null,
     searchText,
     titleSkeletonText: skeletons,
@@ -54,7 +64,7 @@ export async function getAllVideos(): Promise<APICallResult> {
   try {
     const db = getPool()
     const [rows] = await db.query<VideoFileRow[]>(
-      `SELECT vf.id, vf.title, vf.caption, vf.request, vf.video_section_id,
+      `SELECT vf.id, vf.title, vf.caption, vf.image, vf.request, vf.video_section_id,
               vf.length, vf.active, vf.created_at,
               vs.title as section_title, vs.request as section_request
        FROM video_files vf
