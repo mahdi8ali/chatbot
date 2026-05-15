@@ -294,27 +294,104 @@ export async function getProjectDetails(projectId: number): Promise<{
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// ── رابط الصور المرفقة ─────────────────────────────────────────────────────
+const ATTACHMENTS_BASE = "https://projects.alkafeel.net/uploads/projects/attachments/thumb"
+
+function attachmentUrl(img: string): string {
+  return `${ATTACHMENTS_BASE}/${img}`
+}
+
 //  get_project_image
-//  يُجلب صورة مشروع واحد فقط عند الطلب الصريح من المستخدم
+//  يُجلب الصورة الرئيسية للمشروع مع عدد الصور المرفقة
 // ──────────────────────────────────────────────────────────────────────────
 export async function getProjectImage(projectId: number): Promise<{
   success: boolean
-  data?: { id: number; name: string; image_url: string }
+  data?: {
+    id: number
+    name: string
+    image_url: string
+    project_url: string
+    news_url: string | null
+    attached_images_count: number
+  }
   error?: string
 }> {
   try {
     const db = getProjectsPool()
-    const [rows] = await db.execute<RowDataPacket[]>(
-      `SELECT id, name, img FROM projects WHERE id = ? AND deleted_at IS NULL LIMIT 1`,
-      [projectId]
-    )
+    const [[rows], [countRows]] = await Promise.all([
+      db.execute<RowDataPacket[]>(
+        `SELECT id, name, img, news_url FROM projects WHERE id = ? AND deleted_at IS NULL LIMIT 1`,
+        [projectId]
+      ),
+      db.execute<RowDataPacket[]>(
+        `SELECT COUNT(*) AS cnt FROM project_images WHERE project_id = ?`,
+        [projectId]
+      ),
+    ])
     if (!rows.length) return { success: false, error: "المشروع غير موجود" }
     const row = rows[0] as any
     const url = imageUrl(row.img)
     if (!url) return { success: false, error: "لا توجد صورة لهذا المشروع" }
-    return { success: true, data: { id: row.id, name: row.name, image_url: url } }
+    const count = (countRows[0] as any)?.cnt ?? 0
+    return {
+      success: true,
+      data: {
+        id: row.id,
+        name: row.name,
+        image_url: url,
+        project_url: projectUrl(row.id),
+        news_url: row.news_url || null,
+        attached_images_count: Number(count),
+      },
+    }
   } catch (err: any) {
     console.error("[projects-db] getProjectImage error:", err)
+    return { success: false, error: err.message }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+//  get_project_images
+//  يُجلب جميع الصور المرفقة (project_images) لمشروع معين
+// ──────────────────────────────────────────────────────────────────────────
+interface ProjectImageRow extends RowDataPacket {
+  image: string
+}
+
+const GALLERY_LIMIT = 9
+
+export async function getProjectImages(projectId: number): Promise<{
+  success: boolean
+  data?: { project_id: number; images: string[]; count: number; total_count: number; project_url: string }
+  error?: string
+}> {
+  try {
+    const db = getProjectsPool()
+    const [[rows], [countRows]] = await Promise.all([
+      db.execute<ProjectImageRow[]>(
+        `SELECT image FROM project_images WHERE project_id = ? ORDER BY id ASC LIMIT ${GALLERY_LIMIT}`,
+        [projectId]
+      ),
+      db.execute<RowDataPacket[]>(
+        `SELECT COUNT(*) AS cnt FROM project_images WHERE project_id = ?`,
+        [projectId]
+      ),
+    ])
+    if (!rows.length) return { success: false, error: "لا توجد صور مرفقة لهذا المشروع." }
+    const images = rows.map((r) => attachmentUrl(r.image))
+    const total = Number((countRows[0] as any)?.cnt ?? images.length)
+    return {
+      success: true,
+      data: {
+        project_id: projectId,
+        images,
+        count: images.length,
+        total_count: total,
+        project_url: projectUrl(projectId),
+      },
+    }
+  } catch (err: any) {
+    console.error("[projects-db] getProjectImages error:", err)
     return { success: false, error: err.message }
   }
 }

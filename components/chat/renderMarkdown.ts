@@ -6,6 +6,28 @@ const svgVideo = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" st
 const svgLinkOut = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`
 const svgArrow = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`
 
+const ATTACH_IMG_RE = /^!\[([^\]]*)\]\((https:\/\/projects\.alkafeel\.net\/uploads\/projects\/attachments\/thumb\/[^)]+)\)$/
+
+function buildGalleryLoadingHtml(count: number): string {
+  return '<div class="gm-img-gallery gm-gallery-loading">' +
+    '<div class="gm-thumb-wrap"></div>'.repeat(count) +
+    '</div>'
+}
+
+const BROKEN_IMG_STYLE = 'width:80px;height:80px;object-fit:contain;border-radius:6px;opacity:0.35;'
+
+function buildGalleryBlock(lines: string[]): string {
+  const thumbs = lines.map((line, i) => {
+    const m = line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
+    if (!m) return ""
+    const alt = m[1] || ("صورة " + (i + 1))
+    const thumbSrc = m[2]
+    const originalSrc = thumbSrc.replace("/attachments/thumb/", "/attachments/")
+    return `<div class="gm-thumb-wrap"><img class="gm-thumb" src="${thumbSrc}" alt="${alt}" loading="lazy" data-original="${originalSrc}" onerror="this.style='${BROKEN_IMG_STYLE}';this.src='/broken-img.svg'" /></div>`
+  }).join("")
+  return `<div class="gm-img-gallery">${thumbs}</div>`
+}
+
 function processPlainText(raw: string): string {
   let html = raw
     .replace(/&/g, "&amp;")
@@ -140,8 +162,25 @@ function buildSourcesBlock(sourceLines: string[]): string {
   </div>`
 }
 
-export function renderMarkdown(text: string): string {
+// عدد افتراضي للـ skeleton عند عدم معرفة الحجم الحقيقي
+const DEFAULT_SKELETON_COUNT = 5
+
+export function renderMarkdown(text: string, streaming = false): string {
   if (!text) return ""
+
+  // أثناء الستريمنج: احذف سطور صور المرفقات (كاملة أو جزئية) واستبدلها بـ skeleton
+  let galleryStripped = false
+  if (streaming) {
+    const cleaned = text.split("\n").filter(line => {
+      const t = line.trim()
+      if (t.startsWith("![") && (t.includes("/attachments/") || ATTACH_IMG_RE.test(t))) {
+        galleryStripped = true
+        return false
+      }
+      return true
+    })
+    if (galleryStripped) text = cleaned.join("\n")
+  }
 
   const lines = text.split("\n")
   const sourceLines: string[] = []
@@ -158,12 +197,32 @@ export function renderMarkdown(text: string): string {
   }
 
   const CONTACT_EMOJI = /^(📍|📞|📧)/u
-  type Segment = { type: "text" | "contact"; lines: string[]; name?: string }
+  type Segment = { type: "text" | "contact" | "gallery"; lines: string[]; name?: string }
   const segments: Segment[] = []
   let i = 0
   while (i < bodyLines.length) {
     const line = bodyLines[i]
     const trimmed = line.trim()
+
+    // Gallery: 2+ consecutive attachment image lines
+    if (ATTACH_IMG_RE.test(trimmed)) {
+      const galleryLines: string[] = []
+      while (i < bodyLines.length && ATTACH_IMG_RE.test(bodyLines[i].trim())) {
+        galleryLines.push(bodyLines[i].trim())
+        i++
+      }
+      if (galleryLines.length >= 2) {
+        segments.push({ type: "gallery", lines: galleryLines })
+        continue
+      }
+      // Single attachment image — fall through as text
+      if (segments.length === 0 || segments[segments.length - 1].type !== "text") {
+        segments.push({ type: "text", lines: [] })
+      }
+      segments[segments.length - 1].lines.push(...galleryLines)
+      continue
+    }
+
     const isContactHeader =
       /^\*\*[^*]+\*\*\s*$/.test(trimmed) &&
       bodyLines.slice(i + 1, i + 6).some(l => CONTACT_EMOJI.test(l.trim()))
@@ -186,11 +245,19 @@ export function renderMarkdown(text: string): string {
   }
 
   let html = ""
+  let skeletonCount = DEFAULT_SKELETON_COUNT
   for (const seg of segments) {
-    html += seg.type === "text"
-      ? processPlainText(seg.lines.join("\n"))
-      : buildContactCard(seg)
+    if (seg.type === "gallery") {
+      skeletonCount = seg.lines.length
+      html += streaming ? buildGalleryLoadingHtml(seg.lines.length) : buildGalleryBlock(seg.lines)
+    } else if (seg.type === "contact") {
+      html += buildContactCard(seg)
+    } else {
+      html += processPlainText(seg.lines.join("\n"))
+    }
   }
+
+  if (galleryStripped) html += buildGalleryLoadingHtml(skeletonCount)
 
   html += buildSourcesBlock(sourceLines)
   return html

@@ -177,3 +177,36 @@ export async function siteGetStatistics(): Promise<APICallResult> {
     data: { total_projects: data.length, top_sections, sections_count: sectionCounts.size }
   }
 }
+
+// ── جلب الصور المرفقة لخبر بمعرّفه ────────────────────────────────────────────
+const NEWS_IMAGE_BASE = "https://www.alkafeel.net/alkafeelnews/up3"
+
+interface NewsAttachmentRow extends RowDataPacket {
+  image: string
+  title: string | null
+  sort: number
+}
+
+export async function getNewsImages(newsId: number): Promise<APICallResult> {
+  try {
+    const db = getPool()
+    const [rows] = await db.execute<NewsAttachmentRow[]>(
+      `SELECT image, title, sort FROM news_image_attachments
+       WHERE news_id = ? AND deleted_at IS NULL
+       ORDER BY sort ASC
+       LIMIT 30`,
+      [newsId]
+    )
+    if (!rows.length) {
+      return { success: false, error: "لا توجد صور مرفقة لهذا الخبر." }
+    }
+    const images = rows.map((r) => ({
+      image_url: `${NEWS_IMAGE_BASE}/${r.image}`,
+      title: r.title || null,
+    }))
+    return { success: true, data: { news_id: newsId, images, count: images.length } }
+  } catch (err: any) {
+    console.error("[news-service] getNewsImages error:", err)
+    return { success: false, error: err.message }
+  }
+}

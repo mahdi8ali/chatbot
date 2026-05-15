@@ -15,7 +15,8 @@ import {
   type AllowedToolName
 } from "./site-tools-definitions"
 import { executeToolByName, type APICallResult } from "./site-api-service"
-import { searchProjectsDB, getProjectDetails, getProjectImage } from "./projects-db-service"
+import { searchProjectsDB, getProjectDetails, getProjectImage, getProjectImages } from "./projects-db-service"
+import { getNewsImages } from "./news-service"
 import { getFallbackResponse } from "./system-prompts"
 import {
   isEmptyAPIResponse,
@@ -185,12 +186,45 @@ async function processToolCall(
     return { tool_call_id: toolCallId, role: "tool", content }
   }
 
+  if (toolName === "get_news_images") {
+    const newsImgResult = await getNewsImages(Number(args.news_id))
+    return {
+      tool_call_id: toolCallId,
+      role: "tool",
+      content: JSON.stringify(
+        newsImgResult.success
+          ? newsImgResult.data
+          : { success: false, message: newsImgResult.error || "لا توجد صور مرفقة." }
+      ),
+    }
+  }
+
   if (toolName === "get_project_image") {
     const imgResult = await getProjectImage(Number(args.project_id))
     const content = (!imgResult.success || !imgResult.data)
       ? JSON.stringify({ success: false, message: imgResult.error || "لا توجد صورة لهذا المشروع." })
-      : JSON.stringify({ success: true, name: imgResult.data.name, image_url: imgResult.data.image_url })
+      : JSON.stringify({
+          success: true,
+          name: imgResult.data.name,
+          image_url: imgResult.data.image_url,
+          project_url: imgResult.data.project_url,
+          news_url: imgResult.data.news_url || null,
+          attached_images_count: imgResult.data.attached_images_count,
+        })
     return { tool_call_id: toolCallId, role: "tool", content }
+  }
+
+  if (toolName === "get_project_images") {
+    const imgsResult = await getProjectImages(Number(args.project_id))
+    return {
+      tool_call_id: toolCallId,
+      role: "tool",
+      content: JSON.stringify(
+        imgsResult.success
+          ? imgsResult.data
+          : { success: false, message: imgsResult.error || "لا توجد صور مرفقة لهذا المشروع." }
+      ),
+    }
   }
 
   // تنفيذ الأداة عبر site-api-service

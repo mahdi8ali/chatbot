@@ -249,6 +249,48 @@ export const TOOL_GET_VIDEO_SECTIONS: ChatCompletionTool = {
 }
 
 /**
+ * أداة جلب الصور المرفقة لمشروع معين (project_images)
+ */
+export const TOOL_GET_PROJECT_IMAGES: ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "get_project_images",
+    description: "جلب جميع الصور المرفقة (المعرض) لمشروع معين. استخدم هذه الأداة فقط عندما يطلب المستخدم صراحةً رؤية المزيد من صور المشروع أو الصور المرفقة أو معرض الصور.",
+    parameters: {
+      type: "object",
+      properties: {
+        project_id: {
+          type: "number",
+          description: "رقم المشروع (ID) المطلوب صوره المرفقة"
+        }
+      },
+      required: ["project_id"]
+    }
+  }
+}
+
+/**
+ * أداة جلب الصور المرفقة لخبر معين
+ */
+export const TOOL_GET_NEWS_IMAGES: ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "get_news_images",
+    description: "جلب جميع الصور المرفقة لخبر معين من قاعدة البيانات. استخدم هذه الأداة عندما يطلب المستخدم رؤية المزيد من صور خبر تم عرضه، أو الصور المرفقة بمقال.",
+    parameters: {
+      type: "object",
+      properties: {
+        news_id: {
+          type: "number",
+          description: "رقم الخبر (ID) المطلوب جلب صوره المرفقة"
+        }
+      },
+      required: ["news_id"]
+    }
+  }
+}
+
+/**
  * قائمة جميع الأدوات المتاحة
  */
 export const ALL_SITE_TOOLS: ChatCompletionTool[] = [
@@ -261,7 +303,9 @@ export const ALL_SITE_TOOLS: ChatCompletionTool[] = [
   TOOL_SEARCH_PROJECTS_DB,
   TOOL_GET_PROJECT_DETAILS,
   TOOL_GET_PROJECT_IMAGE,
-  TOOL_GET_VIDEO_SECTIONS
+  TOOL_GET_PROJECT_IMAGES,
+  TOOL_GET_VIDEO_SECTIONS,
+  TOOL_GET_NEWS_IMAGES
 ]
 
 /**
@@ -277,7 +321,9 @@ export const ALLOWED_TOOL_NAMES = [
   "search_projects_db",
   "get_project_details",
   "get_project_image",
-  "get_video_sections"
+  "get_project_images",
+  "get_video_sections",
+  "get_news_images"
 ] as const
 
 export type AllowedToolName = (typeof ALLOWED_TOOL_NAMES)[number]
