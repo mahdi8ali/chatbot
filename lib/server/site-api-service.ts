@@ -15,9 +15,11 @@ import { normalizeArabicWord, consonantSkeleton, scoreItem } from "./db"
 import { getAllNews, siteListCategories, siteGetLatest, siteGetStatistics } from "./news-service"
 import { getAllAbbas } from "./sira-service"
 import { getAllHistory } from "./history-service"
-import { getAllVideos, getVideoSections } from "./video-service"
+import { getAllVideos, getVideoSections, searchVideos } from "./video-service"
 import { searchContacts } from "./contacts-service"
 import { getAllProjects } from "./projects-service"
+import { searchPlaces } from "./places-service"
+import { getPrayerTimes } from "./prayer-service"
 
 export type { APICallResult }
 
@@ -144,6 +146,22 @@ export async function executeToolByName(
         return await searchContacts(args.query)
       case "get_video_sections":
         return await getVideoSections()
+      case "search_videos":
+        return await searchVideos({
+          query: args.query || "",
+          section: args.section,
+          limit: args.limit
+        })
+      case "search_places":
+        return await searchPlaces({
+          query: args.query,
+          category: args.category,
+          city: args.city,
+          near: args.near,
+          limit: args.limit
+        })
+      case "get_prayer_times":
+        return await getPrayerTimes({ date: args.date })
       default:
         return { success: false, error: `أداة غير معروفة: ${toolName}` }
     }

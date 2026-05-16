@@ -332,8 +332,14 @@ async function processToolCall(
     console.log(`[Function Call] search_contacts formatted:\n${content}`)
 
   } else {
-    const cleanedResult = cleanResultForGPT(result)
-    content = JSON.stringify(cleanedResult)
+    // أدوات الأماكن والصلاة والفيديو: أعد البيانات كما هي بدون تنظيف (cleanProject يحذف maps_url وغيرها)
+    const PASSTHROUGH_TOOLS = new Set(["search_places", "get_prayer_times", "search_videos"])
+    if (PASSTHROUGH_TOOLS.has(toolName)) {
+      content = JSON.stringify(result)
+    } else {
+      const cleanedResult = cleanResultForGPT(result)
+      content = JSON.stringify(cleanedResult)
+    }
   }
 
   const toolResponse = {

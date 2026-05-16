@@ -155,6 +155,11 @@ export default function ChatStyles() {
       .gm-root.dark .gm-contact-block .gm-contact-name { color: #e8eaed; }
       .gm-root.dark .gm-contact-block .gm-contact-row { color: #bdc1c6; }
 
+      .gm-map-preview { margin: 5px 0 2px 0; }
+      .gm-map-clip { width: 210px; height: 105px; overflow: hidden; border-radius: 8px; border: 1px solid #e0e0e0; }
+      .gm-map-clip iframe { display: block; border: none; margin-top: -2px; }
+      .gm-root.dark .gm-map-clip { border-color: #444; }
+
       .gm-typing { display: flex; gap: 5px; align-items: center; padding: 8px 0; }
       .gm-typing span { width: 7px; height: 7px; border-radius: 50%; background: #9aa0a6; animation: typingDot 1.4s ease-in-out infinite; }
       .gm-typing span:nth-child(2) { animation-delay: 0.2s; }

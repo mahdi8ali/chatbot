@@ -100,3 +100,60 @@ export async function getVideoSections(): Promise<APICallResult> {
     return { success: false, error: error.message }
   }
 }
+
+/**
+ * بحث مباشر في video_files عبر قاعدة البيانات (بدون cache)
+ * أسرع وأدق من تحميل كل الفيديوهات عند البحث بعنوان محدد
+ */
+export async function searchVideos(params: {
+  query: string
+  section?: string
+  limit?: number
+}): Promise<APICallResult> {
+  const db = getPool()
+  const limit = Math.min(Math.max(params.limit || 5, 1), 20)
+  const q = `%${params.query}%`
+
+  try {
+    // بناء فلتر القسم إذا طُلب
+    let sectionJoin = ""
+    let sectionWhere = ""
+    const bindParams: any[] = [q, q]
+
+    if (params.section) {
+      sectionJoin = `LEFT JOIN video_sections vs ON vs.id = vf.video_section_id`
+      sectionWhere = `AND JSON_UNQUOTE(JSON_EXTRACT(vs.title, '$.ar')) LIKE ?`
+      bindParams.push(`%${params.section}%`)
+    } else {
+      sectionJoin = `LEFT JOIN video_sections vs ON vs.id = vf.video_section_id`
+    }
+
+    bindParams.push(limit)
+
+    const [rows] = await db.query<VideoFileRow[]>(
+      `SELECT vf.id, vf.title, vf.caption, vf.image, vf.request,
+              vf.video_section_id, vf.length, vf.active, vf.created_at,
+              vs.title as section_title, vs.request as section_request
+       FROM video_files vf
+       ${sectionJoin}
+       WHERE vf.active = 1 AND vf.deleted_at IS NULL
+         AND (
+           JSON_UNQUOTE(JSON_EXTRACT(vf.title, '$.ar')) LIKE ?
+           OR JSON_UNQUOTE(JSON_EXTRACT(vf.caption, '$.ar')) LIKE ?
+         )
+       ${sectionWhere}
+       ORDER BY vf.created_at DESC
+       LIMIT ?`,
+      bindParams
+    )
+
+    const results = (rows as VideoFileRow[]).map(mapVideoToItem)
+    return {
+      success: true,
+      data: { results, total: results.length, query: params.query }
+    }
+  } catch (error: any) {
+    console.error("[DB Error - searchVideos]:", error?.message)
+    return { success: false, error: "تعذر البحث في قاعدة بيانات الفيديو" }
+  }
+}

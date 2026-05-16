@@ -40,6 +40,17 @@ function processPlainText(raw: string): string {
       '<img class="gm-project-img" src="$2" alt="$1" loading="lazy" />'
     )
     .replace(
+      /\[([^\]]+)\]\((https:\/\/maps\.google\.com\/\?q=([-\d.]+),([-\d.]+))\)/g,
+      (_, label, url, lat, lng) => {
+        const fLat = parseFloat(lat)
+        const fLng = parseFloat(lng)
+        const d = 0.004
+        const bbox = `${fLng - d},${fLat - d},${fLng + d},${fLat + d}`
+        const embedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${fLat},${fLng}`
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="gm-maps-link">${label}</a><div class="gm-map-preview"><div class="gm-map-clip"><iframe src="${embedUrl}" width="210" height="145" frameborder="0" scrolling="no" loading="lazy" title="خريطة الموقع"></iframe></div></div>`
+      }
+    )
+    .replace(
       /\[([^\]]+)\]\(([^)]+)\)/g,
       '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
     )

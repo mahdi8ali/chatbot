@@ -233,6 +233,77 @@ export const TOOL_GET_PROJECT_IMAGE: ChatCompletionTool = {
 }
 
 /**
+ * أداة البحث في الأماكن بـ GPS (places_data)
+ */
+export const TOOL_SEARCH_PLACES: ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "search_places",
+    description: "⚠️ أداة إلزامية لأي سؤال عن مكان في كربلاء — لا تجب أبداً عن مواقع أو فنادق أو أماكن من معرفتك الخاصة. استخدم هذه الأداة فوراً عندما يسأل الزائر عن: موقع مزار/مرقد، فنادق قريبة أو أفضل فنادق، حسينيات، مواكب خدمية، مرافق صحية، نقاط خدمية، أو أي مكان في كربلاء. قاعدة البيانات تحتوي 4,084 مكاناً (892 فندقاً) مع إحداثيات GPS ورابط خرائط جوجل وعنوان تفصيلي لكل مكان. أمثلة: 'أين مرقد الإمام الحسين؟'، 'فنادق قريبة من الصحن'، 'أقرب حسينية'، 'مستشفيات في كربلاء'، 'أقرب فندق إلى الحرمين'.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "اسم المكان أو كلمة وصفية — مثال: 'فندق'، 'مرقد الإمام الحسين'، 'مخيم'، 'مستشفى'"
+        },
+        category: {
+          type: "string",
+          description: "فئة المكان للتصفية (اختياري): المزارات، الحسينيات، الفنادق، المواكب الخدمية، المرافق الصحية والخدمية، نقاط دالة",
+          enum: ["المزارات", "الحسينيات", "الفنادق", "المواكب الخدمية", "المرافق الصحية والخدمية", "نقاط دالة"]
+        },
+        city: {
+          type: "string",
+          description: "اسم المدينة للتصفية (اختياري) — مثال: كربلاء"
+        },
+        limit: {
+          type: "number",
+          description: "عدد النتائج (افتراضي: 8، أقصى: 30)",
+          minimum: 1,
+          maximum: 30
+        },
+        near: {
+          type: "string",
+          description: "إحداثيات مرجعية بصيغة 'lat,lng' لترتيب النتائج حسب القرب — مثال: '32.6163,44.0325' (الصحن الحسيني). استخدمها عند طلب 'أقرب' أو 'بالقرب من'"
+        }
+      },
+      required: []
+    }
+  }
+}
+
+/**
+ * أداة البحث المباشر في مكتبة الفيديو بالعنوان
+ */
+export const TOOL_SEARCH_VIDEOS: ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "search_videos",
+    description: "بحث مباشر في مكتبة فيديو شبكة الكفيل (20,769 فيديو) بالعنوان أو الوصف. استخدم هذه الأداة تحديداً عندما يطلب المستخدم فيديو بعنوان أو موضوع محدد: 'أريد فيديو عن محرم'، 'فيديو طوعة العصر'، 'أرني فيديوهات الأربعين'، 'فيديو خطبة'... إلخ. النتيجة تحتوي رابط mp4 مباشر للتشغيل.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "كلمات البحث بالعربية — عنوان الفيديو أو موضوعه"
+        },
+        section: {
+          type: "string",
+          description: "اسم قسم الفيديو للتصفية (اختياري) — مثال: أربعين، محرم، مواكب، إصدارات"
+        },
+        limit: {
+          type: "number",
+          description: "عدد النتائج (افتراضي: 3، أقصى: 10)",
+          minimum: 1,
+          maximum: 10
+        }
+      },
+      required: ["query"]
+    }
+  }
+}
+
+/**
  * أداة الحصول على أقسام مكتبة الفيديو
  */
 export const TOOL_GET_VIDEO_SECTIONS: ChatCompletionTool = {
@@ -293,6 +364,27 @@ export const TOOL_GET_NEWS_IMAGES: ChatCompletionTool = {
 /**
  * قائمة جميع الأدوات المتاحة
  */
+/**
+ * أداة أوقات الصلاة
+ */
+export const TOOL_GET_PRAYER_TIMES: ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "get_prayer_times",
+    description: "جلب أوقات الصلاة (الفجر، الشروق، الظهر، المغرب، منتصف الليل) من قاعدة بيانات كربلاء. استخدم هذه الأداة عندما يسأل المستخدم عن أوقات الصلاة لليوم أو لتاريخ معين.",
+    parameters: {
+      type: "object",
+      properties: {
+        date: {
+          type: "string",
+          description: "التاريخ المطلوب بصيغة YYYY-MM-DD أو DD/MM. إذا لم يُحدد يُستخدم تاريخ اليوم."
+        }
+      },
+      required: []
+    }
+  }
+}
+
 export const ALL_SITE_TOOLS: ChatCompletionTool[] = [
   TOOL_SEARCH_PROJECTS,
   TOOL_GET_PROJECT_BY_ID,
@@ -305,7 +397,10 @@ export const ALL_SITE_TOOLS: ChatCompletionTool[] = [
   TOOL_GET_PROJECT_IMAGE,
   TOOL_GET_PROJECT_IMAGES,
   TOOL_GET_VIDEO_SECTIONS,
-  TOOL_GET_NEWS_IMAGES
+  TOOL_SEARCH_VIDEOS,
+  TOOL_GET_NEWS_IMAGES,
+  TOOL_SEARCH_PLACES,
+  TOOL_GET_PRAYER_TIMES
 ]
 
 /**
@@ -323,7 +418,10 @@ export const ALLOWED_TOOL_NAMES = [
   "get_project_image",
   "get_project_images",
   "get_video_sections",
-  "get_news_images"
+  "search_videos",
+  "get_news_images",
+  "search_places",
+  "get_prayer_times"
 ] as const
 
 export type AllowedToolName = (typeof ALLOWED_TOOL_NAMES)[number]
