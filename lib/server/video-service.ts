@@ -102,6 +102,29 @@ export async function getVideoSections(): Promise<APICallResult> {
 }
 
 /**
+ * يحذف حركات التشكيل العربي من النص
+ */
+function stripDiacritics(text: string): string {
+  // ً ٌ ٍ َ ُ ِ ّ ْ ٰ ـ
+  return text.replace(/[\u064B-\u0652\u0670\u0640]/g, "")
+}
+
+/**
+ * كلمات سياق شائعة لا تنتمي لعنوان الفيديو (ألقاب، طلبات، أنواع)
+ * تُحذف من استعلام الـ fallback لتحسين دقة البحث
+ */
+const CONTEXT_WORDS = new Set([
+  // ألقاب
+  "سيدة","سيد","مولاي","مولى","الحاج","الشيخ","الأستاذ","الدكتور",
+  // كلمات طلب/سياق
+  "اريد","ابي","بغيت","اعطني","شاهد","عرض","جلب","ايبي","اعطيني",
+  // أنواع المحتوى
+  "فيلم","فيلمي","مسلسل","مسلسله","حلقة","حلقه","برنامج","مقطع","فيديو","كليب","كلمات","قصيدة","نشيد","اغنية",
+  // كلمات وصفية شائعة
+  "مال","مالي","الي","منها","عنه","عنها",
+])
+
+/**
  * بحث مباشر في video_files عبر قاعدة البيانات (بدون cache)
  * أسرع وأدق من تحميل كل الفيديوهات عند البحث بعنوان محدد
  */
@@ -112,20 +135,33 @@ export async function searchVideos(params: {
 }): Promise<APICallResult> {
   const db = getPool()
   const limit = Math.min(Math.max(params.limit || 5, 1), 20)
-  const q = `%${params.query}%`
+
+  // حذف التشكيل من كلمات البحث وتقسيمها
+  const words = stripDiacritics(params.query.trim()).split(/\s+/).filter(w => w.length > 1)
+  const searchWords = words.length > 0 ? words : [stripDiacritics(params.query)]
+
+  // دالة مساعدة: تُرجع SQL يحذف التشكيل ويلف النص بمسافات لمطابقة حدود الكلمات
+  const stripped = (col: string) =>
+    `CONCAT(' ', REGEXP_REPLACE(IFNULL(JSON_UNQUOTE(JSON_EXTRACT(${col}, '$.ar')), ''), '[ًٌٍَُِّْٰـ]', ''), ' ')`
 
   try {
     // بناء فلتر القسم إذا طُلب
-    let sectionJoin = ""
+    let sectionJoin = `LEFT JOIN video_sections vs ON vs.id = vf.video_section_id`
     let sectionWhere = ""
-    const bindParams: any[] = [q, q]
+    const bindParams: any[] = []
+
+    // بناء شرط AND لكل كلمة — يبحث في العنوان والوصف بعد حذف التشكيل
+    const wordConditions = searchWords.map(() =>
+      `(${stripped("vf.title")} LIKE ? OR ${stripped("vf.caption")} LIKE ?)`
+    ).join(" AND ")
+
+    for (const w of searchWords) {
+      bindParams.push(`% ${w} %`, `% ${w} %`)
+    }
 
     if (params.section) {
-      sectionJoin = `LEFT JOIN video_sections vs ON vs.id = vf.video_section_id`
       sectionWhere = `AND JSON_UNQUOTE(JSON_EXTRACT(vs.title, '$.ar')) LIKE ?`
       bindParams.push(`%${params.section}%`)
-    } else {
-      sectionJoin = `LEFT JOIN video_sections vs ON vs.id = vf.video_section_id`
     }
 
     bindParams.push(limit)
@@ -137,15 +173,43 @@ export async function searchVideos(params: {
        FROM video_files vf
        ${sectionJoin}
        WHERE vf.active = 1 AND vf.deleted_at IS NULL
-         AND (
-           JSON_UNQUOTE(JSON_EXTRACT(vf.title, '$.ar')) LIKE ?
-           OR JSON_UNQUOTE(JSON_EXTRACT(vf.caption, '$.ar')) LIKE ?
-         )
+         AND (${wordConditions})
        ${sectionWhere}
        ORDER BY vf.created_at DESC
        LIMIT ?`,
       bindParams
     )
+
+    // إذا لم توجد نتائج بـ AND، نجرب كل كلمة وحدها بدءاً من الأطول بعد حذف كلمات السياق
+    if ((rows as VideoFileRow[]).length === 0 && searchWords.length > 1) {
+      // فلتر كلمات السياق (ألقاب، طلبات، أنواع) لتبقى الكلمات المميزة فقط
+      const distinctiveWords = searchWords.filter(w => !CONTEXT_WORDS.has(w))
+      const wordsToTry = distinctiveWords.length > 0 ? distinctiveWords : searchWords
+      const sortedByLength = [...wordsToTry].sort((a, b) => b.length - a.length)
+      for (const word of sortedByLength) {
+        const singleCond = `(${stripped("vf.title")} LIKE ? OR ${stripped("vf.caption")} LIKE ?)`
+        const singleParams: any[] = [`% ${word} %`, `% ${word} %`]
+        if (params.section) singleParams.push(`%${params.section}%`)
+        singleParams.push(limit)
+        const [singleRows] = await db.query<VideoFileRow[]>(
+          `SELECT vf.id, vf.title, vf.caption, vf.image, vf.request,
+                  vf.video_section_id, vf.length, vf.active, vf.created_at,
+                  vs.title as section_title, vs.request as section_request
+           FROM video_files vf
+           ${sectionJoin}
+           WHERE vf.active = 1 AND vf.deleted_at IS NULL
+             AND ${singleCond}
+           ${sectionWhere}
+           ORDER BY vf.created_at DESC
+           LIMIT ?`,
+          singleParams
+        )
+        if ((singleRows as VideoFileRow[]).length > 0) {
+          const results = (singleRows as VideoFileRow[]).map(mapVideoToItem)
+          return { success: true, data: { results, total: results.length, query: params.query } }
+        }
+      }
+    }
 
     const results = (rows as VideoFileRow[]).map(mapVideoToItem)
     return {
