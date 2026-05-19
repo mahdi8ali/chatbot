@@ -23,7 +23,7 @@ export function getDatabaseConfig(): DatabaseConfig {
   const user = process.env.DB_USER || "root"
   const password = process.env.DB_PASSWORD || ""
   const database = process.env.DB_NAME || "db"
-  const connectionLimit = Number(process.env.DB_CONNECTION_LIMIT || "10")
+  const connectionLimit = Number(process.env.DB_CONNECTION_LIMIT || "50")
   const openaiModel = process.env.OPENAI_MODEL || "gpt-4o-mini"
 
   if (!database) {
