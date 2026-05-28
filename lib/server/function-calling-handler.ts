@@ -412,6 +412,7 @@ export async function resolveToolCalls(
       messages: currentMessages,
       tools,
       tool_choice: (toolsWereCalled ? "auto" : "required") as OpenAI.Chat.Completions.ChatCompletionToolChoiceOption,
+      // @ts-ignore — parallel_tool_calls is supported at runtime but missing from older SDK types
       parallel_tool_calls: true,
       temperature: 0.5,
       max_tokens: 200  // اختيار الأداة فقط — لا يحتاج أكثر
