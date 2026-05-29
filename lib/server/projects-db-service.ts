@@ -53,6 +53,7 @@ interface ProjectRow extends RowDataPacket {
   img: string | null
   created_at: string | null
   section_name: string | null
+  properties_text: string | null
 }
 
 interface PropertyRow extends RowDataPacket {
@@ -90,13 +91,24 @@ function excerpt(text: string | null, maxLen = 400): string {
 // ─── تطبيع النص للبحث ─────────────────────────────────────────────────────
 function normalize(text: string): string {
   return text
-    .replace(/[ًٌٍَُِّْ]/g, "")
+    .replace(/[ًٌٍَُِّْ]/g, "")   // تشكيل
+    .replace(/ـ/g, "")             // كاشيدا/تطويل
     .replace(/[أإآا]/g, "ا")
     .replace(/[ةه]/g, "ه")
     .replace(/[يى]/g, "ي")
     .toLowerCase()
     .trim()
 }
+
+// كلمات عامة لا تُعتبر مؤشراً على محتوى المشروع — تُستبعد من الفلترة الدقيقة
+const GENERIC_SEARCH_WORDS = new Set([
+  "جامعه", "كليه", "معهد", "قسم", "مركز", "مدرسه", "مؤسسه",
+  "في", "من", "الي", "علي", "عن", "مع", "بين",
+  "اني", "انا", "اريد", "ابغي", "ابي", "بغيت", "اقدر", "ممكن",
+  "وين", "اين", "اروح", "ادرس", "ادخل", "اشتغل", "اتقدم",
+  "تعليم", "دراسه", "تخصص", "قبول", "تقديم",
+  "كيف", "هل", "ما", "ماهي", "ماهو", "مو", "بس",
+])
 
 // ──────────────────────────────────────────────────────────────────────────
 //  search_projects_db
@@ -143,11 +155,12 @@ export async function searchProjectsDB(params: {
       }
     }
 
-    // استعلام مع JOIN للأقسام
+    // استعلام مع JOIN للأقسام والخصائص (كليات الجامعة، مواصفات المشروع...)
     const sql = `
       SELECT DISTINCT
         p.id, p.name, p.description, p.address, p.section_id, p.news_url,
-        COALESCE(s.name, s2.name) AS section_name
+        COALESCE(s.name, s2.name) AS section_name,
+        (SELECT GROUP_CONCAT(pp.value SEPARATOR ' ') FROM project_property pp WHERE pp.project_id = p.id) AS properties_text
       FROM projects p
       LEFT JOIN sections s ON s.id = p.section_id
       LEFT JOIN project_section ps ON ps.project_id = p.id
@@ -160,22 +173,35 @@ export async function searchProjectsDB(params: {
 
     const [rows] = await db.execute<ProjectRow[]>(sql, sectionParams)
 
-    // فلترة في Node.js
+    // فلترة في Node.js (تشمل الخصائص مثل كليات الجامعة)
+    // الخطوة 1: كل الكلمات يجب أن تتطابق في الـ haystack
     let filtered = rows
     if (queryWords.length > 0) {
       filtered = rows.filter(row => {
-        const haystack = normalize([row.name, row.description, row.address, row.section_name].filter(Boolean).join(" "))
-        return queryWords.every(w => haystack.includes(w)) ||
-               queryWords.some(w => normalize(row.name || "").includes(w))
+        const haystack = normalize([row.name, row.description, row.address, row.section_name, row.properties_text].filter(Boolean).join(" "))
+        return queryWords.every(w => haystack.includes(w))
       })
     }
 
-    // إذا لم تجد شيء بـ "كل الكلمات" جرب أي كلمة
-    if (filtered.length === 0 && queryWords.length > 1) {
+    // الخطوة 2: إذا لم تجد شيء، جرب فقط الكلمات المحددة (بعد استبعاد الكلمات العامة)
+    if (filtered.length === 0 && queryWords.length > 0) {
+      const specificWords = queryWords.filter(w => !GENERIC_SEARCH_WORDS.has(w) && w.length > 2)
+      const wordsToMatch = specificWords.length > 0 ? specificWords : queryWords
       filtered = rows.filter(row => {
-        const haystack = normalize([row.name, row.description].filter(Boolean).join(" "))
-        return queryWords.some(w => haystack.includes(w))
+        const haystack = normalize([row.name, row.description, row.address, row.section_name, row.properties_text].filter(Boolean).join(" "))
+        return wordsToMatch.every(w => haystack.includes(w))
       })
+    }
+
+    // الخطوة 3: آخر محاولة — أي كلمة محددة (ليست عامة) تظهر في الـ haystack
+    if (filtered.length === 0 && queryWords.length > 0) {
+      const specificWords = queryWords.filter(w => !GENERIC_SEARCH_WORDS.has(w) && w.length > 2)
+      if (specificWords.length > 0) {
+        filtered = rows.filter(row => {
+          const haystack = normalize([row.name, row.description, row.properties_text].filter(Boolean).join(" "))
+          return specificWords.some(w => haystack.includes(w))
+        })
+      }
     }
 
     const limit = params.limit || 8
