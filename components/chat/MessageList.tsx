@@ -3,6 +3,7 @@
 import { memo, useRef, useState, useCallback, useEffect, useMemo } from "react"
 import type { Message } from "./types"
 import { renderMarkdown } from "./renderMarkdown"
+import FeedbackButtons from "./FeedbackButtons"
 
 // مُقيَّد بـ memo حتى لا يُعاد الرسم عند كل ضغطة كيبورد في الإدخال
 const MsgBubble = memo(function MsgBubble({ html }: { html: string }) {
@@ -25,10 +26,11 @@ interface MessageListProps {
   loadingPhase: number
   phaseVisible: boolean
   darkMode: boolean
+  sessionId?: string
 }
 
 export default function MessageList({
-  messages, isLoading, isStreaming, loadingPhase, phaseVisible, darkMode
+  messages, isLoading, isStreaming, loadingPhase, phaseVisible, darkMode, sessionId
 }: MessageListProps) {
   const endRef = useRef<HTMLDivElement>(null)
   const [lbImages, setLbImages] = useState<LightboxImage[]>([])
@@ -122,6 +124,9 @@ export default function MessageList({
                     renderedMessages[i] +
                     (isLastAndStreaming ? '<span class="gm-cursor"></span>' : "")
                   } />
+              {msg.role === "assistant" && !isLastAndStreaming && msg.chatLogId && (
+                <FeedbackButtons chatLogId={msg.chatLogId} sessionId={sessionId} />
+              )}
             </div>
           )})}
 

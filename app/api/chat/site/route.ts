@@ -15,6 +15,7 @@ import {
   sanitizeMessages,
   logSecurityIssue
 } from "@/lib/server/data-sanitizer"
+import { saveChatLog } from "@/lib/server/chat-logger"
 import OpenAI from "openai"
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions.mjs"
 
@@ -128,6 +129,7 @@ interface ChatRequest {
   temperature?: number
   max_tokens?: number
   use_tools?: boolean // خيار لتفعيل/تعطيل الأدوات
+  session_id?: string // معرف الجلسة لربط السجلات
 }
 
 /**
@@ -167,8 +169,11 @@ export async function POST(request: Request) {
       messages,
       temperature = 0.5,
       max_tokens = 1200,
-      use_tools = true
+      use_tools = true,
+      session_id
     } = json as ChatRequest
+    const startMs = Date.now()
+    const chatLogId = crypto.randomUUID()
 
     // التحقق من وجود رسائل
     if (!messages || messages.length === 0) {
@@ -246,8 +251,20 @@ export async function POST(request: Request) {
             controller.close()
           }
         })
+        // تسجيل إجابة FAQ (fire-and-forget)
+        saveChatLog({
+          sessionId: session_id,
+          userQuestion: lastMessage.content,
+          finalAnswer: faqText,
+          responseTimeMs: Date.now() - startMs,
+          wasToolUsed: false,
+        }).catch(err => console.error("[ChatLogger]", err))
         return new Response(stream, {
-          headers: { ...securityHeaders, "Content-Type": "text/plain; charset=utf-8" }
+          headers: {
+            ...securityHeaders,
+            "Content-Type": "text/plain; charset=utf-8",
+            "X-Chat-Log-Id": chatLogId,
+          }
         })
       }
     }
@@ -304,19 +321,53 @@ export async function POST(request: Request) {
           : new Set<string>()
         const validIdsStr = [...validIds].join(",")
 
+        // استخرج اسم أول أداة استُدعيت (للتسجيل فقط)
+        let firstToolCalled = ""
+        let firstToolArgs = ""
+        if (toolResult.needsFinalCall) {
+          for (const msg of toolResult.resolvedMessages) {
+            if (msg.role === "assistant" && Array.isArray((msg as any).tool_calls)) {
+              const tc = (msg as any).tool_calls[0]
+              if (tc) {
+                firstToolCalled = tc.function?.name || ""
+                firstToolArgs = tc.function?.arguments || ""
+              }
+              break
+            }
+          }
+        }
+
         // ✅ True streaming: أرسل chunks فوراً بدل الـ buffering
         // ألحق __VALID_IDS__ في نهاية الـ stream للـ client ليتحقق من الروابط محلياً
         const readable = new ReadableStream({
           async start(controller) {
             const enc = new TextEncoder()
+            let buffer = ""
             try {
               for await (const chunk of finalStream) {
                 const content = chunk.choices[0]?.delta?.content || ""
-                if (content) controller.enqueue(enc.encode(content))
+                if (content) {
+                  buffer += content
+                  controller.enqueue(enc.encode(content))
+                }
               }
             } finally {
               controller.enqueue(enc.encode(`\n__VALID_IDS__:${validIdsStr}`))
               controller.close()
+              // تسجيل السؤال والجواب (fire-and-forget)
+              const userQ = sanitizedMessages[sanitizedMessages.length - 1]?.content || ""
+              saveChatLog({
+                sessionId: session_id,
+                userQuestion: userQ,
+                toolCalled: firstToolCalled || undefined,
+                toolArguments: firstToolArgs || undefined,
+                dbResultIds: validIdsStr || undefined,
+                dbResultCount: validIds.size,
+                finalAnswer: buffer,
+                responseTimeMs: Date.now() - startMs,
+                modelName: model,
+                wasToolUsed: toolResult.needsFinalCall,
+              }).catch(err => console.error("[ChatLogger]", err))
             }
           }
         })
@@ -324,6 +375,7 @@ export async function POST(request: Request) {
         return new Response(readable, {
           headers: {
             "Content-Type": "text/plain; charset=utf-8",
+            "X-Chat-Log-Id": chatLogId,
             ...securityHeaders
           }
         })
@@ -346,23 +398,37 @@ export async function POST(request: Request) {
 
     const fallbackStream = new ReadableStream({
       async start(controller) {
+        let buffer = ""
         try {
           for await (const chunk of response) {
             const content = chunk.choices[0]?.delta?.content || ""
             if (content) {
+              buffer += content
               controller.enqueue(new TextEncoder().encode(content))
             }
           }
           controller.close()
         } catch (error) {
           controller.error(error)
+          return
         }
+        // تسجيل الفولباك (fire-and-forget)
+        const userQ = sanitizedMessages[sanitizedMessages.length - 1]?.content || ""
+        saveChatLog({
+          sessionId: session_id,
+          userQuestion: userQ,
+          finalAnswer: buffer,
+          responseTimeMs: Date.now() - startMs,
+          modelName: model,
+          wasToolUsed: false,
+        }).catch(err => console.error("[ChatLogger]", err))
       }
     })
 
     return new Response(fallbackStream, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
+        "X-Chat-Log-Id": chatLogId,
         ...securityHeaders
       }
     })

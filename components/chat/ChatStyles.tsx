@@ -275,6 +275,33 @@ export default function ChatStyles() {
       .gm-root.dark .gm-loading-text { color: #9aa0a6; }
       .gm-root.dark .gm-hint { color: #5f6368; }
       .gm-root.dark .gm-messages-layer::-webkit-scrollbar-thumb { background: #3c3f43; }
+
+      /* ===== Feedback Buttons ===== */
+      .gm-feedback { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding-right: 2px; }
+      .gm-feedback-label { font-size: 11px; color: #9aa0a6; }
+      .gm-feedback-btn { background: none; border: 1px solid #dadce0; border-radius: 50%; width: 28px; height: 28px; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.15s, border-color 0.15s; padding: 0; }
+      .gm-feedback-btn:hover { background: #f1f3f4; border-color: #bdc1c6; }
+      .gm-feedback-btn:disabled { opacity: 0.5; cursor: default; }
+      .gm-feedback-done { font-size: 12px; color: #6b7280; margin-top: 6px; padding-right: 2px; }
+      .gm-feedback-note { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; max-width: 78%; }
+      .gm-feedback-textarea { font-family: inherit; font-size: 13px; direction: rtl; border: 1px solid #dadce0; border-radius: 8px; padding: 6px 10px; resize: vertical; background: #f8f9fa; color: #1f1f1f; outline: none; }
+      .gm-feedback-textarea:focus { border-color: #b1bd52; }
+      .gm-feedback-actions { display: flex; gap: 8px; }
+      .gm-feedback-send { font-size: 12px; background: #b1bd52; color: #fff; border: none; border-radius: 6px; padding: 4px 12px; cursor: pointer; transition: background 0.15s; }
+      .gm-feedback-send:hover { background: #9aa844; }
+      .gm-feedback-send:disabled { opacity: 0.6; cursor: default; }
+      .gm-feedback-cancel { font-size: 12px; background: none; color: #9aa0a6; border: 1px solid #dadce0; border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+      .gm-feedback-cancel:hover { border-color: #bdc1c6; color: #5f6368; }
+
+      /* Dark mode — feedback */
+      .gm-root.dark .gm-feedback-label { color: #9aa0a6; }
+      .gm-root.dark .gm-feedback-btn { border-color: #3c3f43; color: #e3e3e3; }
+      .gm-root.dark .gm-feedback-btn:hover { background: #2d2e30; border-color: #5f6368; }
+      .gm-root.dark .gm-feedback-done { color: #9aa0a6; }
+      .gm-root.dark .gm-feedback-textarea { background: #1e1f20; border-color: #3c3f43; color: #e3e3e3; }
+      .gm-root.dark .gm-feedback-textarea:focus { border-color: #b1bd52; }
+      .gm-root.dark .gm-feedback-cancel { border-color: #3c3f43; color: #9aa0a6; }
+      .gm-root.dark .gm-feedback-cancel:hover { border-color: #5f6368; color: #bdc1c6; }
     `}</style>
   )
 }

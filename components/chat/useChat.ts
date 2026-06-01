@@ -10,6 +10,9 @@ export function useChat(apiEndpoint: string) {
   const [isLoading, setIsLoading] = useState(false)
   const [isStreaming, setIsStreaming] = useState(false)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const sessionIdRef = useRef<string>(
+    typeof crypto !== "undefined" ? crypto.randomUUID() : Math.random().toString(36)
+  )
 
   const sendMessage = async (text?: string) => {
     const messageText = (text || input).trim()
@@ -36,11 +39,14 @@ export function useChat(apiEndpoint: string) {
           messages: newMessages,
           temperature: 0.7,
           max_tokens: 2000,
-          use_tools: true
+          use_tools: true,
+          session_id: sessionIdRef.current,
         })
       })
 
       if (!response.ok) throw new Error("خطأ " + response.status)
+
+      const chatLogId = response.headers.get("x-chat-log-id") || undefined
 
       const contentType = (response.headers.get("content-type") || "").toLowerCase()
       let botReply = ""
@@ -74,7 +80,13 @@ export function useChat(apiEndpoint: string) {
           cleanText = clientStripInvalidLinks(cleanText, validIds)
           setMessages(prev => {
             const updated = [...prev]
-            updated[updated.length - 1] = { role: "assistant", content: cleanText }
+            updated[updated.length - 1] = { role: "assistant", content: cleanText, chatLogId }
+            return updated
+          })
+        } else if (chatLogId) {
+          setMessages(prev => {
+            const updated = [...prev]
+            updated[updated.length - 1] = { ...updated[updated.length - 1], chatLogId }
             return updated
           })
         }
@@ -83,7 +95,7 @@ export function useChat(apiEndpoint: string) {
         botReply = await response.text() || "لم يتم استلام رد."
       }
 
-      setMessages([...newMessages, { role: "assistant", content: botReply }])
+      setMessages([...newMessages, { role: "assistant", content: botReply, chatLogId }])
     } catch (err: any) {
       if (err?.name !== "AbortError") {
         setMessages([
@@ -110,6 +122,7 @@ export function useChat(apiEndpoint: string) {
     isStreaming,
     sendMessage,
     clearChat,
-    stopGeneration
+    stopGeneration,
+    sessionId: sessionIdRef.current,
   }
 }
