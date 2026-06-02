@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { ThumbsUp, ThumbsDown } from "lucide-react"
 
 interface FeedbackButtonsProps {
   chatLogId: string
@@ -9,11 +10,13 @@ interface FeedbackButtonsProps {
 
 export default function FeedbackButtons({ chatLogId, sessionId }: FeedbackButtonsProps) {
   const [state, setState] = useState<"idle" | "not_helpful" | "done">("idle")
+  const [activeRating, setActiveRating] = useState<"helpful" | "not_helpful" | null>(null)
   const [note, setNote] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
   const submit = async (rating: "helpful" | "not_helpful", feedbackNote?: string) => {
     setSubmitting(true)
+    setActiveRating(rating)
     try {
       await fetch("/api/chat/feedback", {
         method: "POST",
@@ -71,22 +74,22 @@ export default function FeedbackButtons({ chatLogId, sessionId }: FeedbackButton
     <div className="gm-feedback">
       <span className="gm-feedback-label">هل كانت الإجابة مفيدة؟</span>
       <button
-        className="gm-feedback-btn helpful"
+        className={`gm-feedback-btn helpful${activeRating === "helpful" ? " active" : ""}`}
         onClick={() => submit("helpful")}
         title="مفيدة"
         aria-label="مفيدة"
         disabled={submitting}
       >
-        👍
+        <ThumbsUp size={14} strokeWidth={2} />
       </button>
       <button
-        className="gm-feedback-btn unhelpful"
+        className={`gm-feedback-btn unhelpful${activeRating === "not_helpful" ? " active" : ""}`}
         onClick={() => setState("not_helpful")}
         title="غير مفيدة"
         aria-label="غير مفيدة"
         disabled={submitting}
       >
-        👎
+        <ThumbsDown size={14} strokeWidth={2} />
       </button>
     </div>
   )

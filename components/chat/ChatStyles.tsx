@@ -279,8 +279,9 @@ export default function ChatStyles() {
       /* ===== Feedback Buttons ===== */
       .gm-feedback { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding-right: 2px; }
       .gm-feedback-label { font-size: 11px; color: #9aa0a6; }
-      .gm-feedback-btn { background: none; border: 1px solid #dadce0; border-radius: 50%; width: 28px; height: 28px; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.15s, border-color 0.15s; padding: 0; }
-      .gm-feedback-btn:hover { background: #f1f3f4; border-color: #bdc1c6; }
+      .gm-feedback-btn { background:#f1f3f4; border:1.5px solid #dadce0; border-radius:20px; height:30px; width:34px; min-width:34px; flex-shrink:0; padding:0; font-size:12px; line-height:1; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:5px; transition:background .15s, border-color .15s, color .15s; white-space:nowrap; color:#5f6368; }
+      .gm-feedback-btn:hover { background: #e8eaed; border-color: #b0b8c1; }
+      .gm-feedback-btn.active, .gm-feedback-btn:active { background: #dcfce7; border-color: #16a34a; color: #15803d; }
       .gm-feedback-btn:disabled { opacity: 0.5; cursor: default; }
       .gm-feedback-done { font-size: 12px; color: #6b7280; margin-top: 6px; padding-right: 2px; }
       .gm-feedback-note { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; max-width: 78%; }
@@ -295,8 +296,9 @@ export default function ChatStyles() {
 
       /* Dark mode — feedback */
       .gm-root.dark .gm-feedback-label { color: #9aa0a6; }
-      .gm-root.dark .gm-feedback-btn { border-color: #3c3f43; color: #e3e3e3; }
-      .gm-root.dark .gm-feedback-btn:hover { background: #2d2e30; border-color: #5f6368; }
+      .gm-root.dark .gm-feedback-btn { background: #2d2e30; border-color: #3c3f43; color: #e3e3e3; }
+      .gm-root.dark .gm-feedback-btn:hover { background: #35363a; border-color: #5f6368; }
+      .gm-root.dark .gm-feedback-btn.active, .gm-root.dark .gm-feedback-btn:active { background: #14532d; border-color: #16a34a; color: #86efac; }
       .gm-root.dark .gm-feedback-done { color: #9aa0a6; }
       .gm-root.dark .gm-feedback-textarea { background: #1e1f20; border-color: #3c3f43; color: #e3e3e3; }
       .gm-root.dark .gm-feedback-textarea:focus { border-color: #b1bd52; }

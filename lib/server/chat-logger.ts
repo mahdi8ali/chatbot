@@ -117,6 +117,49 @@ export async function saveChatLog(data: ChatLogData): Promise<string | null> {
   }
 }
 
+/** يُنشئ صفاً مبدئياً ويُرجع الـ DB id — للحصول على الـ id قبل اكتمال الـ stream */
+export async function createPendingLog(sessionId: string | undefined, userQuestion: string): Promise<string | null> {
+  try {
+    await ensureTables()
+    const db = getPool()
+    const [result] = await db.execute(
+      `INSERT INTO chat_logs (session_id, user_question, was_tool_used) VALUES (?, ?, 0)`,
+      [sessionId || null, sanitizePII(userQuestion)]
+    ) as any
+    return String(result.insertId)
+  } catch (err) {
+    console.error("[ChatLogger] createPendingLog error:", err)
+    return null
+  }
+}
+
+/** يُحدِّث صفاً موجوداً بالبيانات الكاملة بعد اكتمال الـ stream */
+export async function updateChatLog(id: string, data: Omit<ChatLogData, "sessionId" | "userQuestion">): Promise<void> {
+  try {
+    const db = getPool()
+    await db.execute(
+      `UPDATE chat_logs SET
+        tool_called = ?, tool_arguments = ?, db_result_ids = ?,
+        db_result_count = ?, final_answer = ?, response_time_ms = ?,
+        model_name = ?, was_tool_used = ?
+       WHERE id = ?`,
+      [
+        data.toolCalled || null,
+        data.toolArguments ? sanitizePII(data.toolArguments) : null,
+        data.dbResultIds || null,
+        data.dbResultCount ?? 0,
+        data.finalAnswer ? sanitizePII(data.finalAnswer.slice(0, 3000)) : null,
+        data.responseTimeMs ?? 0,
+        data.modelName || null,
+        data.wasToolUsed ? 1 : 0,
+        BigInt(id),
+      ]
+    )
+  } catch (err) {
+    console.error("[ChatLogger] updateChatLog error:", err)
+  }
+}
+
 /** يحفظ تقييم المستخدم (مفيدة / غير مفيدة) */
 export async function saveFeedback(data: {
   chatLogId: string

@@ -15,7 +15,7 @@ import {
   sanitizeMessages,
   logSecurityIssue
 } from "@/lib/server/data-sanitizer"
-import { saveChatLog } from "@/lib/server/chat-logger"
+import { saveChatLog, createPendingLog, updateChatLog } from "@/lib/server/chat-logger"
 import OpenAI from "openai"
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions.mjs"
 
@@ -42,6 +42,34 @@ function extractValidArticleIds(messages: ChatCompletionMessageParam[]): Set<str
     } catch {}
   }
   return ids
+}
+
+/**
+ * عدّ جميع نتائج الأدوات (ليس فقط المقالات) — يشمل أوقات الصلاة والأماكن وغيرها
+ * يُستخدم لتحديد db_result_count بشكل صحيح في السجل
+ */
+function countAllToolResults(messages: ChatCompletionMessageParam[]): number {
+  let count = 0
+  for (const msg of messages) {
+    if (msg.role !== "tool") continue
+    const content = typeof msg.content === "string" ? msg.content : ""
+    if (!content) continue
+    try {
+      const parsed = JSON.parse(content)
+      if (!parsed?.success) continue
+      const data = parsed?.data
+      if (!data) continue
+      if (Array.isArray(data?.results)) {
+        count += data.results.length
+      } else if (Array.isArray(data)) {
+        count += data.length
+      } else if (typeof data === "object") {
+        // نتيجة واحدة (أوقات الصلاة، تفاصيل مشروع، ...) → تُعدّ 1
+        count += 1
+      }
+    } catch {}
+  }
+  return count
 }
 
 /**
@@ -173,7 +201,6 @@ export async function POST(request: Request) {
       session_id
     } = json as ChatRequest
     const startMs = Date.now()
-    const chatLogId = crypto.randomUUID()
 
     // التحقق من وجود رسائل
     if (!messages || messages.length === 0) {
@@ -243,27 +270,27 @@ export async function POST(request: Request) {
           ? `${faqMatch.answer}\n\n📖 *المصدر: سيرة أبي الفضل العباس (ع)* — 🔗 [اقرأ المزيد](${faqMatch.url})`
           : faqMatch.answer
 
+        const faqLogId = await createPendingLog(session_id, lastMessage.content)
         const encoder = new TextEncoder()
         const stream = new ReadableStream({
           start(controller) {
             controller.enqueue(encoder.encode(faqText))
             controller.enqueue(encoder.encode(`\n__VALID_IDS__:`))
             controller.close()
+            if (faqLogId) {
+              updateChatLog(faqLogId, {
+                finalAnswer: faqText,
+                responseTimeMs: Date.now() - startMs,
+                wasToolUsed: false,
+              }).catch(err => console.error("[ChatLogger]", err))
+            }
           }
         })
-        // تسجيل إجابة FAQ (fire-and-forget)
-        saveChatLog({
-          sessionId: session_id,
-          userQuestion: lastMessage.content,
-          finalAnswer: faqText,
-          responseTimeMs: Date.now() - startMs,
-          wasToolUsed: false,
-        }).catch(err => console.error("[ChatLogger]", err))
         return new Response(stream, {
           headers: {
             ...securityHeaders,
             "Content-Type": "text/plain; charset=utf-8",
-            "X-Chat-Log-Id": chatLogId,
+            "X-Chat-Log-Id": faqLogId || "",
           }
         })
       }
@@ -339,6 +366,8 @@ export async function POST(request: Request) {
 
         // ✅ True streaming: أرسل chunks فوراً بدل الـ buffering
         // ألحق __VALID_IDS__ في نهاية الـ stream للـ client ليتحقق من الروابط محلياً
+        const userQ = sanitizedMessages[sanitizedMessages.length - 1]?.content || ""
+        const toolStreamLogId = await createPendingLog(session_id, userQ)
         const readable = new ReadableStream({
           async start(controller) {
             const enc = new TextEncoder()
@@ -352,22 +381,24 @@ export async function POST(request: Request) {
                 }
               }
             } finally {
-              controller.enqueue(enc.encode(`\n__VALID_IDS__:${validIdsStr}`))
-              controller.close()
-              // تسجيل السؤال والجواب (fire-and-forget)
-              const userQ = sanitizedMessages[sanitizedMessages.length - 1]?.content || ""
-              saveChatLog({
-                sessionId: session_id,
-                userQuestion: userQ,
-                toolCalled: firstToolCalled || undefined,
-                toolArguments: firstToolArgs || undefined,
-                dbResultIds: validIdsStr || undefined,
-                dbResultCount: validIds.size,
-                finalAnswer: buffer,
-                responseTimeMs: Date.now() - startMs,
-                modelName: model,
-                wasToolUsed: toolResult.needsFinalCall,
-              }).catch(err => console.error("[ChatLogger]", err))
+              // إغلاق الـ stream — نتجاهل الأخطاء حتى لا تمنع حفظ السجل
+              try {
+                controller.enqueue(enc.encode(`\n__VALID_IDS__:${validIdsStr}`))
+                controller.close()
+              } catch {}
+              // حفظ الجواب دائماً بغض النظر عن حالة الـ stream
+              if (toolStreamLogId) {
+                updateChatLog(toolStreamLogId, {
+                  toolCalled: firstToolCalled || undefined,
+                  toolArguments: firstToolArgs || undefined,
+                  dbResultIds: validIdsStr || undefined,
+                  dbResultCount: Math.max(validIds.size, countAllToolResults(toolResult.resolvedMessages)),
+                  finalAnswer: buffer || undefined,
+                  responseTimeMs: Date.now() - startMs,
+                  modelName: model,
+                  wasToolUsed: toolResult.needsFinalCall,
+                }).catch(err => console.error("[ChatLogger]", err))
+              }
             }
           }
         })
@@ -375,7 +406,7 @@ export async function POST(request: Request) {
         return new Response(readable, {
           headers: {
             "Content-Type": "text/plain; charset=utf-8",
-            "X-Chat-Log-Id": chatLogId,
+            "X-Chat-Log-Id": toolStreamLogId || "",
             ...securityHeaders
           }
         })
@@ -396,6 +427,8 @@ export async function POST(request: Request) {
       stream: true
     })
 
+    const fbUserQ = sanitizedMessages[sanitizedMessages.length - 1]?.content || ""
+    const fallbackLogId = await createPendingLog(session_id, fbUserQ)
     const fallbackStream = new ReadableStream({
       async start(controller) {
         let buffer = ""
@@ -407,28 +440,24 @@ export async function POST(request: Request) {
               controller.enqueue(new TextEncoder().encode(content))
             }
           }
-          controller.close()
-        } catch (error) {
-          controller.error(error)
-          return
+        } finally {
+          try { controller.close() } catch {}
+          if (fallbackLogId) {
+            updateChatLog(fallbackLogId, {
+              finalAnswer: buffer || undefined,
+              responseTimeMs: Date.now() - startMs,
+              modelName: model,
+              wasToolUsed: false,
+            }).catch(err => console.error("[ChatLogger]", err))
+          }
         }
-        // تسجيل الفولباك (fire-and-forget)
-        const userQ = sanitizedMessages[sanitizedMessages.length - 1]?.content || ""
-        saveChatLog({
-          sessionId: session_id,
-          userQuestion: userQ,
-          finalAnswer: buffer,
-          responseTimeMs: Date.now() - startMs,
-          modelName: model,
-          wasToolUsed: false,
-        }).catch(err => console.error("[ChatLogger]", err))
       }
     })
 
     return new Response(fallbackStream, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
-        "X-Chat-Log-Id": chatLogId,
+        "X-Chat-Log-Id": fallbackLogId || "",
         ...securityHeaders
       }
     })
