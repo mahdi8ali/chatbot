@@ -213,7 +213,7 @@ export default function AnalyticsPage() {
   const fetchData = useCallback(async () => {
     setLoading(true); setError(null); setSpinning(true)
     try {
-      const res = await fetch("/api/analytics")
+      const res = await fetch("/api/analytics", { cache: "no-store" })
       if (!res.ok) throw new Error("HTTP " + res.status)
       const json = await res.json()
       if (json.error) throw new Error(json.error)

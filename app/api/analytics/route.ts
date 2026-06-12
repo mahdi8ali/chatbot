@@ -1,4 +1,7 @@
 import mysql from "mysql2/promise"
+
+// ⚠️ منع Next.js من تخزين (cache) نتائج الـ API — دائماً اقرأ من DB مباشرة
+export const dynamic = "force-dynamic"
 import { getDatabaseConfig } from "@/lib/server/site-api-config"
 
 let pool: mysql.Pool | null = null
@@ -185,6 +188,8 @@ export async function GET() {
       noTool: noTool[0],
       improvements: improvements[0],
       repeated: repeated[0],
+    }, {
+      headers: { "Cache-Control": "no-store, no-cache, must-revalidate" }
     })
   } catch (err: any) {
     console.error("[Analytics API]", err)
