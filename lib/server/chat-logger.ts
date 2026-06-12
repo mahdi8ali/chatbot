@@ -6,20 +6,22 @@
  */
 
 import mysql from "mysql2/promise"
+import { getDatabaseConfig } from "./site-api-config"
 
 let pool: mysql.Pool | null = null
 
 function getPool(): mysql.Pool {
   if (pool) return pool
+  const cfg = getDatabaseConfig()
   pool = mysql.createPool({
-    host: process.env.DB_HOST || "127.0.0.1",
-    port: Number(process.env.DB_PORT || "3306"),
-    user: process.env.DB_USER || "root",
-    password: process.env.DB_PASSWORD || "",
-    database: process.env.PROJECTS_DB_NAME || process.env.DB_NAME || "alkafeel_projects",
+    host: cfg.host,
+    port: cfg.port,
+    user: cfg.user,
+    password: cfg.password,
+    database: process.env.LOGS_DB_NAME || process.env.PROJECTS_DB_NAME || cfg.database || "alkafeel_projects",
     connectionLimit: 5,
     charset: "utf8mb4",
-    ...(process.env.DB_SOCKET ? { socketPath: process.env.DB_SOCKET } : {}),
+    socketPath: process.env.DB_SOCKET || undefined,
   })
   return pool
 }

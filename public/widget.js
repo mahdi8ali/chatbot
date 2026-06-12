@@ -195,6 +195,35 @@
     '@media(prefers-reduced-motion:reduce){',
       '.alkw-widget-container,.alkw-chat-button,.alkw-message,.alkw-loading-wrapper{animation:none!important;transition:none!important}',
     '}',
+    /* ── Feedback styles ── */
+    '.alkw-feedback { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 0 8px; align-self: flex-end; direction: rtl; }',
+    '.alkw-feedback-label { font-size: 11px; color: #9ca3af; }',
+    '.alkw-feedback-btn {',
+      'all:initial; background:#1f2937; border:1px solid #374151; border-radius:20px;',
+      'height:26px; width:30px; display:inline-flex; align-items:center; justify-content:center;',
+      'color:#9ca3af; cursor:pointer; transition: all 0.2s;',
+    '}',
+    '.alkw-feedback-btn:hover { background: #374151; color: #fff; }',
+    '.alkw-feedback-btn.alkw-helpful:active { background: #065f46; border-color: #047857; color: #fff; }',
+    '.alkw-feedback-btn.alkw-unhelpful:active { background: #991b1b; border-color: #b91c1c; color: #fff; }',
+    '.alkw-feedback-done { font-size: 11px; color: #9ca3af; margin-top: 6px; padding: 0 8px; align-self: flex-end; }',
+    '.alkw-feedback-note { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; padding: 0 8px; width: 80%; align-self: flex-end; }',
+    '.alkw-feedback-textarea {',
+      'all:initial; font-family:inherit; font-size: 12px; direction: rtl; border: 1px solid #374151;',
+      'border-radius: 8px; padding: 6px 10px; resize: none; background: #1f2937; color: #e5e7eb; outline: none;',
+    '}',
+    '.alkw-feedback-textarea:focus { border-color: #f3bf3d; }',
+    '.alkw-feedback-actions { display: flex; gap: 8px; }',
+    '.alkw-feedback-send {',
+      'all:initial; font-size: 11px; background: #f3bf3d; color: #fff; border: none; border-radius: 6px;',
+      'padding: 4px 10px; cursor: pointer; transition: background 0.2s; font-family: inherit;',
+    '}',
+    '.alkw-feedback-send:hover { background: #d4a832; }',
+    '.alkw-feedback-cancel {',
+      'all:initial; font-size: 11px; background: none; color: #9ca3af; border: 1px solid #374151;',
+      'border-radius: 6px; padding: 4px 10px; cursor: pointer; transition: all 0.2s; font-family: inherit;',
+    '}',
+    '.alkw-feedback-cancel:hover { border-color: #4b5563; color: #e5e7eb; }',
   ].join('\n');
 
   // ==========================================================================
@@ -243,6 +272,11 @@
     this.isLoading     = false;
     this._panelBuilt   = false;          // ← lazy flag
     this.el            = {};             // DOM refs
+
+    // Generate unique session ID
+    this.sessionId     = (typeof crypto !== "undefined" && crypto.randomUUID) 
+      ? crypto.randomUUID() 
+      : Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
     this._initButton();
   }
@@ -408,6 +442,7 @@
         temperature: 0.5,
         max_tokens:  1200,
         use_tools: true,
+        session_id:  self.sessionId,
       }),
     })
     .then(function(response) {
@@ -422,14 +457,16 @@
         });
       }
 
+      var chatLogId = response.headers.get('x-chat-log-id') || '';
+
       // ✅ دائماً streaming — الرد يأتي كـ text/plain stream
       if (response.body) {
-        return self._readStream(response);
+        return self._readStream(response, chatLogId);
       }
 
       // fallback: قراءة كنص
       return response.text().then(function(t) {
-        self.addMessage('assistant', t || 'لم يتم استلام رد.');
+        self.addMessage('assistant', t || 'لم يتم استلام رد.', chatLogId);
       });
     })
     .catch(function(err) {
@@ -444,7 +481,7 @@
     });
   };
 
-  AlkafeelChatWidget.prototype._readStream = function(response) {
+  AlkafeelChatWidget.prototype._readStream = function(response, chatLogId) {
     var reader = response.body.getReader();
     var decoder = new TextDecoder();
     var full = '';
@@ -467,6 +504,9 @@
             self._scroll();
           }
           self.messages.push({ role: 'assistant', content: full });
+          if (chatLogId) {
+            self._renderFeedback(bubble, chatLogId);
+          }
           return;
         }
         full += decoder.decode(result.value, { stream: true });
@@ -486,6 +526,9 @@
         bubble.innerHTML = self._fmt(full);
       }
       self.messages.push({ role: 'assistant', content: full });
+      if (chatLogId) {
+        self._renderFeedback(bubble, chatLogId);
+      }
     });
   };
 
@@ -516,12 +559,120 @@
 
   // ---------- DOM helpers ----------
 
-  AlkafeelChatWidget.prototype.addMessage = function(role, content) {
+  AlkafeelChatWidget.prototype.addMessage = function(role, content, chatLogId) {
     this.messages.push({ role: role, content: content });
 
     var bub = _el('div', { className: 'alkw-message alkw-' + role, innerHTML: this._fmt(content) });
     this.el.messagesArea.appendChild(bub);
+    if (role === 'assistant' && chatLogId) {
+      this._renderFeedback(bub, chatLogId);
+    }
     this._scroll();
+  };
+
+  AlkafeelChatWidget.prototype._renderFeedback = function(bubbleElement, chatLogId) {
+    var self = this;
+    var wrapper = _el('div');
+    bubbleElement.parentNode.insertBefore(wrapper, bubbleElement.nextSibling);
+
+    function showButtons() {
+      wrapper.className = 'alkw-feedback';
+      wrapper.innerHTML = '';
+
+      var label = _el('span', { className: 'alkw-feedback-label', textContent: 'هل كانت الإجابة مفيدة؟' });
+      wrapper.appendChild(label);
+
+      var yesBtn = _el('button', {
+        className: 'alkw-feedback-btn alkw-helpful',
+        innerHTML: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:block"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>',
+        title: 'مفيدة'
+      });
+      yesBtn.setAttribute('aria-label', 'مفيدة');
+
+      var noBtn = _el('button', {
+        className: 'alkw-feedback-btn alkw-unhelpful',
+        innerHTML: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:block"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm12-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>',
+        title: 'غير مفيدة'
+      });
+      noBtn.setAttribute('aria-label', 'غير مفيدة');
+
+      wrapper.appendChild(yesBtn);
+      wrapper.appendChild(noBtn);
+      self._scroll();
+
+      yesBtn.addEventListener('click', function() {
+        sendFeedback('helpful');
+      });
+
+      noBtn.addEventListener('click', function() {
+        showForm();
+      });
+    }
+
+    function showForm() {
+      wrapper.className = 'alkw-feedback-note';
+      wrapper.innerHTML = '';
+
+      var textarea = _el('textarea', {
+        className: 'alkw-feedback-textarea',
+        placeholder: 'مثلاً: الجواب غير دقيق، لم يفهم سؤالي…',
+        maxLength: 500,
+        rows: 2
+      });
+
+      var actions = _el('div', { className: 'alkw-feedback-actions' });
+
+      var sendBtn = _el('button', {
+        className: 'alkw-feedback-send',
+        textContent: 'إرسال الملاحظة'
+      });
+
+      var cancelBtn = _el('button', {
+        className: 'alkw-feedback-cancel',
+        textContent: 'إلغاء'
+      });
+
+      actions.appendChild(sendBtn);
+      actions.appendChild(cancelBtn);
+
+      wrapper.appendChild(textarea);
+      wrapper.appendChild(actions);
+      self._scroll();
+      textarea.focus();
+
+      sendBtn.addEventListener('click', function() {
+        var noteText = textarea.value.trim();
+        sendFeedback('not_helpful', noteText);
+      });
+
+      cancelBtn.addEventListener('click', function() {
+        showButtons();
+      });
+    }
+
+    function sendFeedback(rating, note) {
+      var apiBase = self.config.apiEndpoint.replace(/\/chat\/site\/?$/, '');
+      var feedbackUrl = apiBase + '/chat/feedback';
+
+      fetch(feedbackUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_log_id: chatLogId,
+          session_id: self.sessionId,
+          rating: rating,
+          feedback_note: note || ''
+        })
+      }).catch(function(e) {
+        console.error('[AlKafeel Widget] Feedback submission failed:', e);
+      });
+
+      wrapper.className = 'alkw-feedback-done';
+      wrapper.innerHTML = 'شكرًا، تم تسجيل تقييمك.';
+      self._scroll();
+    }
+
+    showButtons();
   };
 
   AlkafeelChatWidget.prototype._addLoading = function(id) {
