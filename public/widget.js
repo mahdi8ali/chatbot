@@ -551,7 +551,7 @@
     return '<div class="alkw-welcome">'
          + '<div class="alkw-welcome-icon"><img src="' + logoUrl + '" alt=""></div>'
          + '<h3>مرحباً بك ، انا مساعدك الشخصي</h3>'
-         + '<p>اسألني أي سؤال عن مشاريع العتبة العباسية المقدسة وتفاصيلهن بشكل كامل</p>'
+         + '<p>اسألني أي سؤال عن مشاريع العتبة العباسية المقدسة تفاصيلها بشكل كامل</p>'
          + '<div class="alkw-quick-buttons">' + html + '</div></div>';
   };
 
