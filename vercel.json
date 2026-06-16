@@ -1,7 +1,6 @@
 {
   "version": 2,
   "name": "alkafeel-chatbot-widget",
-  "public": true,
   "github": {
     "silent": true
   },
