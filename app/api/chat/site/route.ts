@@ -3,7 +3,7 @@ import {
   getFallbackResponse,
   FALLBACK_OUT_OF_SCOPE
 } from "@/lib/server/system-prompts"
-import { searchFAQ } from "@/lib/server/faq"
+import { matchCurated } from "@/lib/server/curated-service"
 import { classifyScope } from "@/lib/server/scope-guard"
 import { getOpenAIModel } from "@/lib/server/site-api-config"
 import { ALL_SITE_TOOLS } from "@/lib/server/site-tools-definitions"
@@ -277,26 +277,33 @@ export async function POST(request: Request) {
       apiKey: openaiApiKey
     })
 
-    // ===== فحص FAQ الثابت أولاً =====
-    // إذا تطابق سؤال المستخدم مع إجابة موثوقة، أرسلها مباشرةً دون الاتصال بـ OpenAI
+    // ===== فحص المخزن المنسّق أولاً (بديل searchFAQ) =====
+    // إذا تطابق سؤال المستخدم مع إجابة منسّقة موثوقة، أرسلها مباشرةً دون الاتصال بـ OpenAI
     if (lastMessage.role === "user") {
-      const faqMatch = searchFAQ(lastMessage.content)
-      if (faqMatch) {
-        console.log(`[Chat API] FAQ hit for: "${lastMessage.content.slice(0, 60)}"`)
-        const faqText = faqMatch.url
-          ? `${faqMatch.answer}\n\n📖 *المصدر: سيرة أبي الفضل العباس (ع)* — 🔗 [اقرأ المزيد](${faqMatch.url})`
-          : faqMatch.answer
+      let curated = null
+      try {
+        curated = await matchCurated(lastMessage.content) // C4: تدهور آمن
+      } catch (err) {
+        console.error("[Curated] match failed, continuing:", err)
+        curated = null // فشل الخدمة ⇒ المتابعة للمسار الطبيعي
+      }
 
-        const faqLogId = await createPendingLog(session_id, lastMessage.content)
+      if (curated) {
+        console.log(`[Chat API] Curated hit (${curated.category}) for: "${lastMessage.content.slice(0, 60)}"`)
+        const curatedText = curated.url
+          ? `${curated.answer}\n\n📖 *المصدر* — 🔗 [اقرأ المزيد](${curated.url})`
+          : curated.answer
+
+        const curatedLogId = await createPendingLog(session_id, lastMessage.content)
         const encoder = new TextEncoder()
         const stream = new ReadableStream({
           start(controller) {
-            controller.enqueue(encoder.encode(faqText))
+            controller.enqueue(encoder.encode(curatedText))
             controller.enqueue(encoder.encode(`\n__VALID_IDS__:`))
             controller.close()
-            if (faqLogId) {
-              updateChatLog(faqLogId, {
-                finalAnswer: faqText,
+            if (curatedLogId) {
+              updateChatLog(curatedLogId, {
+                finalAnswer: curatedText,
                 responseTimeMs: Date.now() - startMs,
                 wasToolUsed: false,
               }).catch(err => console.error("[ChatLogger]", err))
@@ -307,7 +314,7 @@ export async function POST(request: Request) {
           headers: {
             ...securityHeaders,
             "Content-Type": "text/plain; charset=utf-8",
-            "X-Chat-Log-Id": faqLogId || "",
+            "X-Chat-Log-Id": curatedLogId || "",
           }
         })
       }

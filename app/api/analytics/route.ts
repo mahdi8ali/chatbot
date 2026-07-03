@@ -2,7 +2,9 @@ import mysql from "mysql2/promise"
 
 // ⚠️ منع Next.js من تخزين (cache) نتائج الـ API — دائماً اقرأ من DB مباشرة
 export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
 import { getDatabaseConfig } from "@/lib/server/site-api-config"
+import { requireAdmin } from "@/lib/server/admin-auth"
 
 let pool: mysql.Pool | null = null
 function getPool(): mysql.Pool {
@@ -21,7 +23,10 @@ function getPool(): mysql.Pool {
   return pool
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  const deny = requireAdmin(req)
+  if (deny) return deny
+
   try {
     const db = getPool()
 

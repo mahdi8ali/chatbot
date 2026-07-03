@@ -50,7 +50,7 @@ export const FAQ_ENTRIES: FAQEntry[] = [
 /**
  * تطبيع النص العربي: توحيد الهمزات والألف والتاء المربوطة
  */
-function normalizeArabic(text: string): string {
+export function normalizeArabic(text: string): string {
   return text
     .replace(/[أإآا]/g, "ا")
     .replace(/[ةه]/g, "ه")
