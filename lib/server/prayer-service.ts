@@ -33,6 +33,14 @@ export async function getPrayerTimes(params: {
     // تحديد التاريخ المطلوب
     const day2 = resolveDateToDayMonth(params.date)
 
+    // دفاع في العمق: تاريخ مُقدَّم بصيغة غير قابلة للتحليل → رفض بدل الرجوع الصامت لليوم
+    if (params.date && day2 === null) {
+      return {
+        success: false,
+        error: "صيغة التاريخ غير صالحة. استخدم YYYY-MM-DD أو DD/MM لتاريخ ميلادي صحيح."
+      }
+    }
+
     const [rows] = await db.query<SalahRow[]>(
       `SELECT id, month, day, day2, fajer, rise, noon, ghrob, mid
        FROM salah
@@ -73,8 +81,15 @@ export async function getPrayerTimes(params: {
 
 /**
  * تحويل التاريخ إلى صيغة DD/MM المستخدمة في جدول salah
+ *
+ * ملاحظة: مُصدَّرة لأغراض الاختبار (تغيير غير سلوكي وقابل للعكس).
+ *
+ * السلوك:
+ *   - بلا إدخال (undefined/فارغ) → تاريخ اليوم بصيغة DD/MM (دون تغيير).
+ *   - إدخال بصيغة مدعومة (YYYY-MM-DD / DD/MM / DD-MM) → DD/MM (دون تغيير).
+ *   - إدخال مُقدَّم بصيغة غير معروفة/غير قابلة للتحليل → null (بدل الرجوع الصامت لليوم).
  */
-function resolveDateToDayMonth(input?: string): string {
+export function resolveDateToDayMonth(input?: string): string | null {
   if (!input) {
     // اليوم الحالي
     const now = new Date()
@@ -99,9 +114,8 @@ function resolveDateToDayMonth(input?: string): string {
     return formatDayMonth(parseInt(dashMatch[1]), parseInt(dashMatch[2]))
   }
 
-  // الافتراضي: اليوم الحالي
-  const now = new Date()
-  return formatDayMonth(now.getDate(), now.getMonth() + 1)
+  // تاريخ مُقدَّم بصيغة غير قابلة للتحليل → إشارة عدم صلاحية (لا رجوع صامت لليوم)
+  return null
 }
 
 function formatDayMonth(day: number, month: number): string {

@@ -371,13 +371,170 @@ export const TOOL_GET_PRAYER_TIMES: ChatCompletionTool = {
   type: "function",
   function: {
     name: "get_prayer_times",
-    description: "جلب أوقات الصلاة (الفجر، الشروق، الظهر، المغرب، منتصف الليل) من قاعدة بيانات كربلاء. استخدم هذه الأداة عندما يسأل المستخدم عن أوقات الصلاة لليوم أو لتاريخ معين.",
+    description: "جلب أوقات الصلاة (الفجر، الشروق، الظهر، المغرب، منتصف الليل) من قاعدة بيانات كربلاء. استخدم هذه الأداة فقط لأوقات صلاة اليوم أو لتاريخ ميلادي صريح صحيح يقدّمه المستخدم بصيغة YYYY-MM-DD أو DD/MM. لا تستخدم هذه الأداة لتاريخ ناتج عن تحويل هجري↔ميلادي أو مُشتق من توقيت مناسبة دينية (هذه الحالات خارج النطاق؛ لا تخترع أو تحوّل تاريخاً لاستدعاء هذه الأداة).",
     parameters: {
       type: "object",
       properties: {
         date: {
           type: "string",
-          description: "التاريخ المطلوب بصيغة YYYY-MM-DD أو DD/MM. إذا لم يُحدد يُستخدم تاريخ اليوم."
+          description: "التاريخ الميلادي الصريح الصحيح بصيغة YYYY-MM-DD أو DD/MM. إذا لم يُحدد يُستخدم تاريخ اليوم. لا تمرّر تاريخاً ناتجاً عن تحويل هجري↔ميلادي أو مُشتقاً من توقيت مناسبة دينية (خارج النطاق)."
+        }
+      },
+      required: []
+    }
+  }
+}
+
+/**
+ * أداة عدّ ذكر الكيان/الكلمة ضمن نافذة زمنية (تحليلية)
+ */
+export const TOOL_COUNT_MENTIONS: ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "count_mentions",
+    description: "عدّ عدد مرات ذكر كلمة أو اسم أو موضوع في أخبار شبكة الكفيل ضمن فترة زمنية. استخدمها لأسئلة مثل: «كم مرة ذُكر علي البدري خلال آخر شهر؟»، «كم خبراً تحدّث عن الأربعين هذا الأسبوع؟». العدّ تقريبي مبني على مطابقة الكلمة في العنوان والمحتوى.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "الكلمة أو الاسم أو الموضوع المراد عدّ ذكره (بالعربية)"
+        },
+        period: {
+          type: "string",
+          description: "الفترة النسبية",
+          enum: ["day", "week", "month", "quarter", "year", "all"]
+        },
+        last_days: {
+          type: "number",
+          description: "عدد الأيام الأخيرة (مثال: 30). يُستخدم بدل period عند الحاجة",
+          minimum: 1,
+          maximum: 3650
+        },
+        from: {
+          type: "string",
+          description: "بداية المدى الصريح بصيغة YYYY-MM-DD (اختياري)"
+        },
+        to: {
+          type: "string",
+          description: "نهاية المدى الصريح بصيغة YYYY-MM-DD (اختياري)"
+        }
+      },
+      required: ["query"]
+    }
+  }
+}
+
+/**
+ * أداة الخط الزمني لذكر الموضوع (تحليلية)
+ */
+export const TOOL_MENTIONS_TIMELINE: ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "mentions_timeline",
+    description: "توزيع زمني (خط زمني) لعدد مرات ذكر كلمة/موضوع عبر أيام أو أسابيع أو أشهر — لرصد الاتجاهات. استخدمها لأسئلة مثل: «كيف تطوّر ذكر الزيارة الأربعينية شهرياً؟».",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "الكلمة أو الموضوع (بالعربية)"
+        },
+        granularity: {
+          type: "string",
+          description: "حبيبة التجميع الزمني",
+          enum: ["day", "week", "month"]
+        },
+        period: {
+          type: "string",
+          enum: ["week", "month", "quarter", "year", "all"]
+        },
+        last_days: {
+          type: "number",
+          minimum: 1,
+          maximum: 3650
+        },
+        from: {
+          type: "string",
+          description: "YYYY-MM-DD (اختياري)"
+        },
+        to: {
+          type: "string",
+          description: "YYYY-MM-DD (اختياري)"
+        }
+      },
+      required: ["query", "granularity"]
+    }
+  }
+}
+
+/**
+ * أداة أكثر الأقسام/التصنيفات نشاطاً (تحليلية)
+ */
+export const TOOL_TOP_TOPICS: ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "top_topics",
+    description: "أكثر الأقسام/التصنيفات نشاطاً (عدد الأخبار) خلال فترة زمنية. استخدمها لأسئلة مثل: «ما أكثر الأقسام نشراً هذا الأسبوع؟».",
+    parameters: {
+      type: "object",
+      properties: {
+        period: {
+          type: "string",
+          enum: ["day", "week", "month", "quarter", "year", "all"]
+        },
+        last_days: {
+          type: "number",
+          minimum: 1,
+          maximum: 3650
+        },
+        section: {
+          type: "string",
+          description: "اسم أو معرّف تصنيف للتصفية (اختياري)"
+        },
+        limit: {
+          type: "number",
+          description: "عدد النتائج (افتراضي 5، أقصى 20)",
+          minimum: 1,
+          maximum: 20
+        }
+      },
+      required: []
+    }
+  }
+}
+
+/**
+ * أداة عدّ الأخبار حسب الفترة والتصنيف (تحليلية)
+ */
+export const TOOL_COUNT_NEWS: ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "count_news",
+    description: "عدّ الأخبار المنشورة ضمن فترة زمنية و/أو تصنيف محدّد. استخدمها لأسئلة مثل: «كم خبراً نُشر في قسم X خلال آخر 30 يوماً؟».",
+    parameters: {
+      type: "object",
+      properties: {
+        category_id: {
+          type: "number",
+          description: "معرّف التصنيف (اختياري)"
+        },
+        period: {
+          type: "string",
+          enum: ["day", "week", "month", "quarter", "year", "all"]
+        },
+        last_days: {
+          type: "number",
+          minimum: 1,
+          maximum: 3650
+        },
+        from: {
+          type: "string",
+          description: "YYYY-MM-DD (اختياري)"
+        },
+        to: {
+          type: "string",
+          description: "YYYY-MM-DD (اختياري)"
         }
       },
       required: []
@@ -400,7 +557,11 @@ export const ALL_SITE_TOOLS: ChatCompletionTool[] = [
   TOOL_SEARCH_VIDEOS,
   TOOL_GET_NEWS_IMAGES,
   TOOL_SEARCH_PLACES,
-  TOOL_GET_PRAYER_TIMES
+  TOOL_GET_PRAYER_TIMES,
+  TOOL_COUNT_MENTIONS,
+  TOOL_MENTIONS_TIMELINE,
+  TOOL_TOP_TOPICS,
+  TOOL_COUNT_NEWS
 ]
 
 /**
@@ -421,7 +582,11 @@ export const ALLOWED_TOOL_NAMES = [
   "search_videos",
   "get_news_images",
   "search_places",
-  "get_prayer_times"
+  "get_prayer_times",
+  "count_mentions",
+  "mentions_timeline",
+  "top_topics",
+  "count_news"
 ] as const
 
 export type AllowedToolName = (typeof ALLOWED_TOOL_NAMES)[number]

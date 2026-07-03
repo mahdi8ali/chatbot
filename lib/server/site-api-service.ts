@@ -65,18 +65,23 @@ export async function siteSearch(
   const sectionLower = section ? section.toLowerCase() : null
 
   const t1 = Date.now()
-  const scored = allData
+  // نحسب كل المطابقات أولاً (قبل القصّ) — ليكون العدد الحقيقي متاحاً لأسئلة "كم عدد..."
+  const matched = allData
     .map(item => ({ item, score: scoreItem(item, words, wordRoots, wordSkeletons, safeQuery, sectionLower) }))
     .filter(x => (words.length ? x.score >= 3 : true))
     .sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score
       return (b.item.created_at_ts || 0) - (a.item.created_at_ts || 0)
     })
+
+  const totalMatches = matched.length
+  // النتائج المعروضة مقتصّة (لتوفير الـ tokens)، لكن total يعكس العدد الكامل للمطابقات
+  const scored = matched
     .slice(0, Math.min(Math.max(limit || 2, 1), 20))
     .map(x => x.item)
 
-  console.log(`[Timing] siteSearch loop (${allData.length} items): ${Date.now() - t1}ms → ${scored.length} results`)
-  return { success: true, data: { results: scored, total: scored.length, query: safeQuery || section || "" } }
+  console.log(`[Timing] siteSearch loop (${allData.length} items): ${Date.now() - t1}ms → ${scored.length}/${totalMatches} matches`)
+  return { success: true, data: { results: scored, total: totalMatches, returned: scored.length, query: safeQuery || section || "" } }
 }
 
 // ── جلب عنصر بمعرّفه من أي مصدر ─────────────────────────────────────────────

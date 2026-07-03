@@ -1,8 +1,10 @@
 import {
   getSiteSystemPrompt,
-  getFallbackResponse
+  getFallbackResponse,
+  FALLBACK_OUT_OF_SCOPE
 } from "@/lib/server/system-prompts"
 import { searchFAQ } from "@/lib/server/faq"
+import { classifyScope } from "@/lib/server/scope-guard"
 import { getOpenAIModel } from "@/lib/server/site-api-config"
 import { ALL_SITE_TOOLS } from "@/lib/server/site-tools-definitions"
 import { resolveToolCalls } from "@/lib/server/function-calling-handler"
@@ -31,9 +33,23 @@ function extractValidArticleIds(messages: ChatCompletionMessageParam[]): Set<str
     if (!content) continue
     try {
       const parsed = JSON.parse(content)
-      const results: any[] = parsed?.data?.results || []
-      const single = parsed?.data
-      const items = results.length > 0 ? results : (single?.id ? [single] : [])
+      // نجمع المعرّفات من كل الأشكال الممكنة لنتائج الأدوات:
+      // - نتائج البحث: data.results أو results
+      // - عيّنة/عناصر التحليل (count_mentions/mentions_timeline...): data.sample أو sample أو items
+      // - نتيجة مفردة: data (إن حملت id)
+      const candidateArrays: any[][] = [
+        parsed?.data?.results,
+        parsed?.results,
+        parsed?.data?.sample,
+        parsed?.sample,
+        parsed?.data?.items,
+        parsed?.items,
+      ].filter(Array.isArray)
+
+      const items: any[] = candidateArrays.length > 0
+        ? candidateArrays.flat()
+        : (parsed?.data?.id ? [parsed.data] : (parsed?.id ? [parsed] : []))
+
       for (const item of items) {
         if (item?.id) ids.add(String(item.id))
         const urlMatch = String(item?.url || "").match(/id=(\d+)/)
@@ -292,6 +308,40 @@ export async function POST(request: Request) {
             ...securityHeaders,
             "Content-Type": "text/plain; charset=utf-8",
             "X-Chat-Log-Id": faqLogId || "",
+          }
+        })
+      }
+    }
+
+    // ===== حارس النطاق الحتمي (قصر مسار للأسئلة خارج النطاق) =====
+    // إذا كان السؤال خارج النطاق (تحويل هجري/ميلادي أو توقيت مناسبة) نعتذر مباشرةً
+    // بنفس نمط قصر مسار FAQ دون استدعاء أي أداة
+    if (lastMessage.role === "user") {
+      const scope = classifyScope(lastMessage.content)
+      if (!scope.inScope) {
+        console.log(`[Chat API] Out-of-scope (${scope.category}) for: "${lastMessage.content.slice(0, 60)}"`)
+
+        const scopeLogId = await createPendingLog(session_id, lastMessage.content)
+        const encoder = new TextEncoder()
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(FALLBACK_OUT_OF_SCOPE))
+            controller.enqueue(encoder.encode(`\n__VALID_IDS__:`))
+            controller.close()
+            if (scopeLogId) {
+              updateChatLog(scopeLogId, {
+                finalAnswer: FALLBACK_OUT_OF_SCOPE,
+                responseTimeMs: Date.now() - startMs,
+                wasToolUsed: false,
+              }).catch(err => console.error("[ChatLogger]", err))
+            }
+          }
+        })
+        return new Response(stream, {
+          headers: {
+            ...securityHeaders,
+            "Content-Type": "text/plain; charset=utf-8",
+            "X-Chat-Log-Id": scopeLogId || "",
           }
         })
       }

@@ -17,6 +17,7 @@ import {
 import { executeToolByName, type APICallResult } from "./site-api-service"
 import { searchProjectsDB, getProjectDetails, getProjectImage, getProjectImages } from "./projects-db-service"
 import { getNewsImages } from "./news-service"
+import { countMentions, mentionsTimeline, topTopics, countNews } from "./analytics-service"
 import { getFallbackResponse } from "./system-prompts"
 import {
   isEmptyAPIResponse,
@@ -227,6 +228,58 @@ async function processToolCall(
     }
   }
 
+  // ─── أدوات تحليل المحتوى (early return — نتائج إحصائية لا تمرّ على cleanProject) ────────
+  if (toolName === "count_mentions") {
+    const r = await countMentions({
+      query: args.query || "",
+      spec: { period: args.period, lastDays: args.last_days, from: args.from, to: args.to },
+      sample: true
+    })
+    return {
+      tool_call_id: toolCallId,
+      role: "tool",
+      content: JSON.stringify(r.success ? r.data : { success: false, message: r.error })
+    }
+  }
+
+  if (toolName === "mentions_timeline") {
+    const r = await mentionsTimeline({
+      query: args.query || "",
+      granularity: args.granularity,
+      spec: { period: args.period, lastDays: args.last_days, from: args.from, to: args.to }
+    })
+    return {
+      tool_call_id: toolCallId,
+      role: "tool",
+      content: JSON.stringify(r.success ? r.data : { success: false, message: r.error })
+    }
+  }
+
+  if (toolName === "top_topics") {
+    const r = await topTopics({
+      spec: { period: args.period, lastDays: args.last_days },
+      section: args.section,
+      limit: args.limit
+    })
+    return {
+      tool_call_id: toolCallId,
+      role: "tool",
+      content: JSON.stringify(r.success ? r.data : { success: false, message: r.error })
+    }
+  }
+
+  if (toolName === "count_news") {
+    const r = await countNews({
+      spec: { period: args.period, lastDays: args.last_days, from: args.from, to: args.to },
+      categoryId: args.category_id
+    })
+    return {
+      tool_call_id: toolCallId,
+      role: "tool",
+      content: JSON.stringify(r.success ? r.data : { success: false, message: r.error })
+    }
+  }
+
   // تنفيذ الأداة عبر site-api-service
   const result: APICallResult = await executeToolByName(
     toolName as AllowedToolName,
@@ -411,6 +464,10 @@ export async function resolveToolCalls(
       model,
       messages: currentMessages,
       tools,
+      // نُجبر استدعاء أداة في التكرار الأول (required) ثم auto لاحقاً.
+      // آمن الآن لأن حارس النطاق الحتمي (scope-guard) في route.ts يقصر مسار
+      // الأسئلة خارج النطاق (هجري/مناسبات) قبل الوصول هنا؛ فإجبار البحث يضمن
+      // أن كل سؤال داخل النطاق (مثل "من هو الأمين العام") يُبحث فعلاً قبل أي اعتذار.
       tool_choice: (toolsWereCalled ? "auto" : "required") as OpenAI.Chat.Completions.ChatCompletionToolChoiceOption,
       // @ts-ignore — parallel_tool_calls is supported at runtime but missing from older SDK types
       parallel_tool_calls: true,
