@@ -34,7 +34,8 @@ export async function siteSearch(
   source?: string,
   fromDate?: string,
   toDate?: string,
-  type?: string
+  type?: string,
+  sortBy?: string
 ): Promise<APICallResult> {
   const t0 = Date.now()
 
@@ -91,6 +92,11 @@ export async function siteSearch(
     .map(item => ({ item, score: scoreItem(item, words, wordRoots, wordSkeletons, safeQuery, sectionLower) }))
     .filter(x => (words.length ? x.score >= 3 : true))
     .sort((a, b) => {
+      // ترتيب حسب المشاهدات إذا طُلب
+      if (sortBy === "views") {
+        return (b.item.views || 0) - (a.item.views || 0)
+      }
+      // الترتيب الافتراضي: الصلة ثم التاريخ
       if (b.score !== a.score) return b.score - a.score
       return (b.item.created_at_ts || 0) - (a.item.created_at_ts || 0)
     })
@@ -189,7 +195,7 @@ export async function executeToolByName(
   try {
     switch (toolName) {
       case "search_projects":
-        return await siteSearch(args.query, args.section, undefined, args.source, args.from_date, args.to_date, args.type)
+        return await siteSearch(args.query, args.section, args.limit, args.source, args.from_date, args.to_date, args.type, args.sort_by)
       case "get_project_by_id":
         return await siteGetProject(args.id)
       case "filter_projects":

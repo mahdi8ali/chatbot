@@ -16,7 +16,7 @@ export const TOOL_SEARCH_PROJECTS: ChatCompletionTool = {
   type: "function",
   function: {
     name: "search_projects",
-    description: "بحث في قاعدة بيانات شبكة الكفيل: الأخبار، سيرة أبي الفضل العباس (ع)، التاريخ، ومكتبة الفيديو. ⚠️ لا تستعملها لأسئلة العدّ الكمّي («كم» / «عدد» / «كم مرة») — استخدم أداة get_statistics بدلاً منها فهي ترجع العدد الدقيق حسب النوع (أخبار، تقارير خبرية، انفوغراف...). ⚠️ إذا ذكر المستخدم شهر أو سنة محددة → استخدم from_date و to_date.",
+    description: "بحث في قاعدة بيانات شبكة الكفيل: الأخبار، سيرة أبي الفضل العباس (ع)، التاريخ، ومكتبة الفيديو. ⚠️ لا تستعملها لأسئلة العدّ الكمّي («كم» / «عدد» / «كم مرة») — استخدم أداة get_statistics بدلاً منها. ⚠️ إذا ذكر المستخدم شهر أو سنة محددة → استخدم from_date و to_date. ⚠️ إذا سأل عن «أكثر خبر زيارة» أو «الأكثر مشاهدة» → استخدم sort_by: \"views\".",
     parameters: {
       type: "object",
       properties: {
@@ -37,6 +37,11 @@ export const TOOL_SEARCH_PROJECTS: ChatCompletionTool = {
           type: "string",
           description: "فلتر حسب نوع المحتوى (اختياري): الاخبار، تقارير خبرية، انفوغراف، مقابلات خاصة، مقالات، قصص مصورة.",
           enum: ["الاخبار", "تقارير خبرية", "انفوغراف", "مقابلات خاصة", "مقالات", "قصص مصورة"]
+        },
+        sort_by: {
+          type: "string",
+          description: "ترتيب النتائج: relevance (افتراضي حسب الصلة) أو views (الأكثر مشاهدة أولاً).",
+          enum: ["relevance", "views"]
         },
         from_date: {
           type: "string",

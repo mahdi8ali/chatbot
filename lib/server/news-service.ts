@@ -70,6 +70,7 @@ function mapNewsToItem(row: NewsRow) {
     description,
     sections: [{ name: categoryName }],
     type_name: row.type_name || null,
+    views: row.views || 0,
     properties: [
       row.title_2 ? { name: "العنوان الفرعي", value: row.title_2 } : null,
       row.photo_comment ? { name: "تعليق الصورة", value: row.photo_comment } : null,
