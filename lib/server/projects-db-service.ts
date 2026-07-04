@@ -6,6 +6,7 @@
 
 import mysql, { Pool, RowDataPacket } from "mysql2/promise"
 import { getDatabaseConfig } from "./site-api-config"
+import { fuzzyNorm, levenshtein } from "./db"
 
 // ─── توليد روابط الموقع ───────────────────────────────────────────────────
 const PROJECTS_BASE = "https://projects.alkafeel.net"
@@ -110,6 +111,43 @@ const GENERIC_SEARCH_WORDS = new Set([
   "كيف", "هل", "ما", "ماهي", "ماهو", "مو", "بس",
 ])
 
+/**
+ * يتحقق إذا كانت كلمة واحدة تتطابق مع أي كلمة في الـ haystack (حرفياً أو تقريبياً).
+ * المطابقة التقريبية عبر Levenshtein تُستخدم فقط كخيار أخير للكلمات الطويلة.
+ */
+function fuzzyWordInHaystack(word: string, haystack: string): boolean {
+  if (haystack.includes(word)) return true
+  if (word.length < 4) return false
+  const nw = fuzzyNorm(word)
+  const maxDist = nw.length <= 5 ? 1 : 2
+  const hayWords = haystack.split(/\s+/).filter(Boolean)
+  for (const hw of hayWords) {
+    const nhw = fuzzyNorm(hw)
+    if (Math.abs(nhw.length - nw.length) > maxDist) continue
+    if (levenshtein(nw, nhw, maxDist) <= maxDist) return true
+  }
+  return false
+}
+
+/**
+ * يبحث عن أقرب كلمة في الـ haystack لكلمة الاستعلام عبر Levenshtein.
+ * يُعيد null إذا لم يجد تطابقاً تقريبياً.
+ */
+function findFuzzyMatch(word: string, haystack: string): string | null {
+  if (word.length < 4) return null
+  const nw = fuzzyNorm(word)
+  const maxDist = nw.length <= 5 ? 1 : 2
+  let best: string | null = null
+  let bestDist = maxDist + 1
+  for (const hw of haystack.split(/\s+/).filter(Boolean)) {
+    const nhw = fuzzyNorm(hw)
+    if (Math.abs(nhw.length - nw.length) > maxDist) continue
+    const d = levenshtein(nw, nhw, maxDist)
+    if (d <= maxDist && d < bestDist) { bestDist = d; best = hw }
+  }
+  return best
+}
+
 // ──────────────────────────────────────────────────────────────────────────
 //  search_projects_db
 //  يبحث بالاسم والوصف والقسم، يرجع قائمة مختصرة
@@ -204,24 +242,75 @@ export async function searchProjectsDB(params: {
       }
     }
 
+    // الخطوة 4: مطابقة تقريبية (Levenshtein) — للأخطاء الإملائية
+    // تُعيد { row, corrections, dist } لكل صفّ مطابَق تقريبياً
+    type FuzzyRow = { row: ProjectRow; corrections: Record<string, string>; dist: number }
+    let fuzzyResults: FuzzyRow[] = []
+    if (filtered.length === 0 && queryWords.length > 0) {
+      const specificWords = queryWords.filter(w => !GENERIC_SEARCH_WORDS.has(w) && w.length >= 4)
+      if (specificWords.length > 0) {
+        for (const row of rows) {
+          const haystack = normalize([row.name, row.description, row.address, row.section_name, row.properties_text].filter(Boolean).join(" "))
+          const corrections: Record<string, string> = {}
+          let totalDist = 0
+          let allMatch = true
+          for (const w of specificWords) {
+            if (haystack.includes(w)) continue
+            const nw = fuzzyNorm(w)
+            const maxDist = nw.length <= 5 ? 1 : 2
+            let bestMatch: string | null = null
+            let bestDist = maxDist + 1
+            for (const hw of haystack.split(/\s+/).filter(Boolean)) {
+              const nhw = fuzzyNorm(hw)
+              if (Math.abs(nhw.length - nw.length) > maxDist) continue
+              const d = levenshtein(nw, nhw, maxDist)
+              if (d <= maxDist && d < bestDist) { bestDist = d; bestMatch = hw }
+            }
+            if (bestMatch) { corrections[w] = bestMatch; totalDist += bestDist }
+            else { allMatch = false; break }
+          }
+          if (allMatch && Object.keys(corrections).length > 0) {
+            fuzzyResults.push({ row, corrections, dist: totalDist })
+          }
+        }
+        // ترتيب حسب جودة المطابقة: الأقل مسافة أولاً
+        fuzzyResults.sort((a, b) => a.dist - b.dist)
+      }
+    }
+
     const limit = params.limit || 8
-    const results = filtered.slice(0, limit).map(row => ({
-      id: row.id,
-      name: row.name,
-      description_snippet: excerpt(row.description, 300),
-      section: row.section_name || "عام",
-      address: row.address || null,
-      url: projectUrl(row.id),
-      section_url: sectionUrl(row.section_id),
-      news_url: row.news_url || null,
-    }))
+    const useFuzzy = filtered.length === 0 && fuzzyResults.length > 0
+    const results = (useFuzzy
+      ? fuzzyResults.slice(0, limit).map(fr => ({
+          id: fr.row.id,
+          name: fr.row.name,
+          description_snippet: excerpt(fr.row.description, 300),
+          section: fr.row.section_name || "عام",
+          address: fr.row.address || null,
+          url: projectUrl(fr.row.id),
+          section_url: sectionUrl(fr.row.section_id),
+          news_url: fr.row.news_url || null,
+          correction: fr.corrections,  // ← تلقائي: {"العنيد":"العميد", ...}
+        }))
+      : filtered.slice(0, limit).map(row => ({
+          id: row.id,
+          name: row.name,
+          description_snippet: excerpt(row.description, 300),
+          section: row.section_name || "عام",
+          address: row.address || null,
+          url: projectUrl(row.id),
+          section_url: sectionUrl(row.section_id),
+          news_url: row.news_url || null,
+        }))
+    )
 
     return {
       success: true,
       data: {
         results,
-        total_found: filtered.length,
+        total_found: useFuzzy ? fuzzyResults.length : filtered.length,
         query_used: params.query,
+        ...(useFuzzy && { fuzzy: true }),  // ← علامة أن النتائج تقريبية
       }
     }
   } catch (err: any) {

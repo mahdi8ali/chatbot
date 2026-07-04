@@ -287,7 +287,8 @@ async function processToolCall(
   )
 
   // ✅ Phase 3: معالجة النتائج الفارغة مع اقتراحات ذكية
-  if (result.success && isEmptyAPIResponse(result.data)) {
+  // لا نعترض إذا كان هناك حقل latest_available (فترة أحدث من آخر تحديث)
+  if (result.success && isEmptyAPIResponse(result.data) && !result.data?.latest_available) {
     console.log(`[Function Call] Empty results detected, generating suggestions`)
     
     // استخرج query من المعاملات
@@ -311,6 +312,24 @@ async function processToolCall(
         suggestions: suggestionsResponse.suggestions,
         context: suggestionsResponse.context,
         original_query: query
+      })
+    }
+  }
+
+  // معالجة خاصة: نتائج فارغة مع تاريخ آخر تحديث (فترة أحدث من القاعدة)
+  if (result.success && isEmptyAPIResponse(result.data) && result.data?.latest_available) {
+    console.log(`[Function Call] No results for date range, latest_available: ${result.data.latest_available}`)
+    return {
+      tool_call_id: toolCallId,
+      role: "tool",
+      content: JSON.stringify({
+        success: true,
+        results: [],
+        total: 0,
+        message: `آخر تحديث لقاعدة البيانات لدينا هو بتاريخ ${result.data.latest_available} ولا نمتلك بيانات أحدث في الفترة المطلوبة. نعمل على تطوير وتحديث قاعدة البيانات باستمرار.`,
+        latest_available: result.data.latest_available,
+        date_range: result.data.date_range,
+        original_query: args.query
       })
     }
   }

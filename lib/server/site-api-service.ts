@@ -31,7 +31,9 @@ export async function siteSearch(
   query?: string,
   section?: string,
   limit: number = 5,
-  source?: string
+  source?: string,
+  fromDate?: string,
+  toDate?: string
 ): Promise<APICallResult> {
   const t0 = Date.now()
 
@@ -64,9 +66,20 @@ export async function siteSearch(
   const wordSkeletons = wordRoots.map(r => (r ? consonantSkeleton(r) : null))
   const sectionLower = section ? section.toLowerCase() : null
 
+  // فلترة حسب النطاق الزمني (إذا حُدّد)
+  let dateFiltered = allData
+  if (fromDate || toDate) {
+    const fromTs = fromDate ? new Date(fromDate).getTime() : 0
+    const toTs = toDate ? new Date(toDate + "T23:59:59").getTime() : Infinity
+    dateFiltered = allData.filter(item => {
+      const ts = item.created_at_ts || (item.created_at ? new Date(item.created_at).getTime() : 0)
+      return ts >= fromTs && ts <= toTs
+    })
+  }
+
   const t1 = Date.now()
   // نحسب كل المطابقات أولاً (قبل القصّ) — ليكون العدد الحقيقي متاحاً لأسئلة "كم عدد..."
-  const matched = allData
+  const matched = dateFiltered
     .map(item => ({ item, score: scoreItem(item, words, wordRoots, wordSkeletons, safeQuery, sectionLower) }))
     .filter(x => (words.length ? x.score >= 3 : true))
     .sort((a, b) => {
@@ -80,8 +93,31 @@ export async function siteSearch(
     .slice(0, Math.min(Math.max(limit || 2, 1), 20))
     .map(x => x.item)
 
-  console.log(`[Timing] siteSearch loop (${allData.length} items): ${Date.now() - t1}ms → ${scored.length}/${totalMatches} matches`)
-  return { success: true, data: { results: scored, total: totalMatches, returned: scored.length, query: safeQuery || section || "" } }
+  console.log(`[Timing] siteSearch loop (${dateFiltered.length} items): ${Date.now() - t1}ms → ${scored.length}/${totalMatches} matches`)
+
+  // عند تحديد نطاق زمني وعدم وجود نتائج: أرجع آخر تاريخ متاح في القاعدة
+  let latestAvailable: string | undefined
+  if ((fromDate || toDate) && scored.length === 0) {
+    const allWithDates = allData
+      .filter(item => item.created_at_ts > 0)
+      .sort((a, b) => (b.created_at_ts || 0) - (a.created_at_ts || 0))
+    if (allWithDates.length > 0) {
+      const d = new Date(allWithDates[0].created_at_ts)
+      latestAvailable = d.toISOString().split("T")[0] // YYYY-MM-DD
+    }
+  }
+
+  return {
+    success: true,
+    data: {
+      results: scored,
+      total: totalMatches,
+      returned: scored.length,
+      query: safeQuery || section || "",
+      date_range: fromDate || toDate ? { from: fromDate || null, to: toDate || null } : undefined,
+      ...(latestAvailable && { latest_available: latestAvailable }),
+    }
+  }
 }
 
 // ── جلب عنصر بمعرّفه من أي مصدر ─────────────────────────────────────────────
@@ -138,7 +174,7 @@ export async function executeToolByName(
   try {
     switch (toolName) {
       case "search_projects":
-        return await siteSearch(args.query, args.section, undefined, args.source)
+        return await siteSearch(args.query, args.section, undefined, args.source, args.from_date, args.to_date)
       case "get_project_by_id":
         return await siteGetProject(args.id)
       case "filter_projects":

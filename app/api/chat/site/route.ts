@@ -4,6 +4,7 @@ import {
   FALLBACK_OUT_OF_SCOPE
 } from "@/lib/server/system-prompts"
 import { matchCurated } from "@/lib/server/curated-service"
+import { kbSearch, SHORT_CIRCUIT_THRESHOLD } from "@/lib/server/kb-service"
 import { classifyScope } from "@/lib/server/scope-guard"
 import { getOpenAIModel } from "@/lib/server/site-api-config"
 import { ALL_SITE_TOOLS } from "@/lib/server/site-tools-definitions"
@@ -20,6 +21,9 @@ import {
 import { saveChatLog, createPendingLog, updateChatLog } from "@/lib/server/chat-logger"
 import OpenAI from "openai"
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions.mjs"
+
+// قصر المسار عالي الثقة (خيار معطّل افتراضياً)
+const KB_SHORT_CIRCUIT_ENABLED = false
 
 /**
  * استخراج IDs المقالات التي أرجعتها الأدوات فعلاً
@@ -320,10 +324,63 @@ export async function POST(request: Request) {
       }
     }
 
+    // ===== قاعدة المعرفة الخاصة (الاسترجاع المسبق وحقن السياق) =====
+    // بعد فشل matchCurated وقبل classifyScope: نبحث في قاعدة المعرفة الخاصة.
+    // عند وجود إصابة مؤكّدة نحقن النتائج كسياق نظام موثوق يصوغ منه النموذج الإجابة.
+    // تدهور آمن: أي فشل يُلتقط ويُتابَع المسار الطبيعي بلا حقن.
+    let kbContext: ChatCompletionMessageParam | null = null
+    if (lastMessage.role === "user") {
+      try {
+        const kbHits = await kbSearch(lastMessage.content)
+        if (kbHits.length > 0) {
+          console.log(`[KB] hit score=${kbHits[0].score.toFixed(2)} for: "${lastMessage.content.slice(0, 60)}"`)
+
+          // خيار قصر المسار عالي الثقة (معطّل افتراضياً) — يُرجع المتن حرفياً كنمط الإجابات المنسّقة
+          if (KB_SHORT_CIRCUIT_ENABLED && kbHits[0].score >= SHORT_CIRCUIT_THRESHOLD) {
+            const kbText = kbHits[0].body
+            const kbLogId = await createPendingLog(session_id, lastMessage.content)
+            const encoder = new TextEncoder()
+            const stream = new ReadableStream({
+              start(controller) {
+                controller.enqueue(encoder.encode(kbText))
+                controller.enqueue(encoder.encode(`\n__VALID_IDS__:`))
+                controller.close()
+                if (kbLogId) {
+                  updateChatLog(kbLogId, {
+                    finalAnswer: kbText,
+                    responseTimeMs: Date.now() - startMs,
+                    wasToolUsed: false,
+                  }).catch(err => console.error("[ChatLogger]", err))
+                }
+              }
+            })
+            return new Response(stream, {
+              headers: {
+                ...securityHeaders,
+                "Content-Type": "text/plain; charset=utf-8",
+                "X-Chat-Log-Id": kbLogId || "",
+              }
+            })
+          }
+
+          // المسار الموصى به: حقن النتائج كسياق نظام موثوق ثمّ يصوغ النموذج الإجابة
+          const kbBlocks = kbHits.map(h => `### ${h.title}\n${h.body}`).join("\n\n")
+          kbContext = {
+            role: "system",
+            content: `لديك معلومات موثوقة من قاعدة المعرفة الخاصة. أجب من هذه المعلومات حصراً وبأسلوبك، ولا تخترع ما ليس فيها:\n\n${kbBlocks}`
+          }
+        }
+      } catch (err) {
+        console.error("[KB] search failed, continuing:", err)
+        // فشل الخدمة ⇒ المتابعة للمسار الطبيعي بلا حقن
+      }
+    }
+
     // ===== حارس النطاق الحتمي (قصر مسار للأسئلة خارج النطاق) =====
     // إذا كان السؤال خارج النطاق (تحويل هجري/ميلادي أو توقيت مناسبة) نعتذر مباشرةً
     // بنفس نمط قصر مسار FAQ دون استدعاء أي أداة
-    if (lastMessage.role === "user") {
+    // ملاحظة: يُتخطّى منطقياً عند وجود إصابة KB مؤكّدة (لدينا معرفة صريحة عن السؤال)
+    if (lastMessage.role === "user" && !kbContext) {
       const scope = classifyScope(lastMessage.content)
       if (!scope.inScope) {
         console.log(`[Chat API] Out-of-scope (${scope.category}) for: "${lastMessage.content.slice(0, 60)}"`)
@@ -362,6 +419,7 @@ export async function POST(request: Request) {
         role: "system",
         content: systemPrompt
       },
+      ...(kbContext ? [kbContext] : []),
       ...sanitizedMessages.map(msg => ({
         role: msg.role as "user" | "assistant" | "system",
         content: msg.content

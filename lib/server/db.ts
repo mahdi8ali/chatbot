@@ -81,6 +81,39 @@ export function buildTitleExtras(title: string): { roots: string; skeletons: str
   return { roots, skeletons }
 }
 
+/** تطبيع خفيف لمقارنة التشابه (توحيد الألف/الهمزات/التاء المربوطة/الياء وحذف التشكيل). */
+export function fuzzyNorm(w: string): string {
+  return (w || "")
+    .replace(/[ًٌٍَُِّْـ]/g, "")
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/ى/g, "ي")
+}
+
+/**
+ * مسافة تحرير (Levenshtein) مع سقف: تتوقّف مبكراً وتُعيد max+1 إن تجاوزت الحدّ.
+ * تُستخدم لمطابقة الأخطاء الإملائية (مثل «العنيد» ↔ «العميد») على كلمات العنوان.
+ */
+export function levenshtein(a: string, b: string, max: number): number {
+  const al = a.length, bl = b.length
+  if (Math.abs(al - bl) > max) return max + 1
+  let prev = new Array(bl + 1)
+  for (let j = 0; j <= bl; j++) prev[j] = j
+  for (let i = 1; i <= al; i++) {
+    const cur = new Array(bl + 1)
+    cur[0] = i
+    let best = i
+    for (let j = 1; j <= bl; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
+      if (cur[j] < best) best = cur[j]
+    }
+    if (best > max) return max + 1
+    prev = cur
+  }
+  return prev[bl]
+}
+
 export function scoreItem(
   item: { searchText: string; name: string; titleSkeletonText: string; sections?: any[] },
   words: string[],
@@ -96,6 +129,9 @@ export function scoreItem(
 
   if (safeQuery && text.includes(safeQuery)) score += 15
 
+  // كلمات العنوان مطبّعة (تُحسب مرّة واحدة) للمطابقة التقريبية عند فشل المطابقة الحرفية
+  let titleWordsNorm: string[] | null = null
+
   for (let i = 0; i < words.length; i++) {
     const w = words[i]
     const root = wordRoots[i]
@@ -106,6 +142,17 @@ export function scoreItem(
       score += titleLower.includes(root) ? 5 : 2
     } else if (skeleton && skeleton.length >= 3 && text.includes(skeleton)) {
       score += titleSkeleton.includes(skeleton) ? 4 : 1
+    } else if (w.length >= 4) {
+      // مطابقة تقريبية للأخطاء الإملائية على كلمات العنوان فقط (رخيصة ودقيقة)
+      const nw = fuzzyNorm(w)
+      const maxDist = nw.length <= 5 ? 1 : 2
+      if (titleWordsNorm === null) {
+        titleWordsNorm = titleLower.split(/\s+/).filter(Boolean).map(fuzzyNorm)
+      }
+      for (const tw of titleWordsNorm) {
+        if (Math.abs(tw.length - nw.length) > maxDist) continue
+        if (levenshtein(nw, tw, maxDist) <= maxDist) { score += 4; break }
+      }
     }
   }
 

@@ -382,28 +382,74 @@ export function windowClause(w: ResolvedWindow): { sql: string; params: (string 
 }
 
 /**
+ * أزواج التطبيع العربي المطبّقة داخل SQL (على العمود) — ثوابت لا مُدخلات مستخدم.
+ * يجب أن تطابق تماماً ما يفعله normalizeArabicLight على جانب الاستعلام، حتى
+ * يتّسق الطرفان (النمط والعمود). تشمل: حذف التطويل والتشكيل، وتوحيد الألف/الهمزات
+ * والتاء المربوطة والياء.
+ */
+const AR_NORM_PAIRS: [string, string][] = [
+  ["ـ", ""], ["ً", ""], ["ٌ", ""], ["ٍ", ""], ["َ", ""], ["ُ", ""], ["ِ", ""], ["ّ", ""], ["ْ", ""],
+  ["أ", "ا"], ["إ", "ا"], ["آ", "ا"], ["ة", "ه"], ["ى", "ي"],
+]
+
+/**
+ * يبني تعبير SQL يطبّع عموداً نصّياً (title/content) بنفس قواعد
+ * normalizeArabicLight عبر REPLACE متداخلة + LOWER. كل الأحرف ثوابت (لا
+ * مُدخل مستخدم)، فلا حقن SQL. يضمن تطابق الطرفين (النمط المُطبّع ↔ العمود المُطبّع).
+ */
+function sqlNormalize(col: string): string {
+  let expr = col
+  for (const [from, to] of AR_NORM_PAIRS) {
+    expr = `REPLACE(${expr}, '${from}', '${to}')`
+  }
+  return `LOWER(${expr})`
+}
+
+/**
+ * يقسّم عبارة البحث (بعد التطبيع الخفيف) إلى رموز (كلمات) فريدة بطول ≥ 2.
+ * عند غياب رموز معتدّ بها (لكن العبارة غير فارغة) يعيد العبارة المطبّعة كرمز واحد.
+ */
+export function buildQueryTokens(query: string): string[] {
+  const normalized = normalizeArabicLight(query || "")
+  if (normalized === "") return []
+  const toks = Array.from(new Set(normalized.split(/\s+/).filter((t) => t.length >= 2)))
+  return toks.length > 0 ? toks : [normalized]
+}
+
+/**
  * يبني جزء WHERE لمطابقة `title`/`content` عبر LIKE + معاملاته.
  *
- * يستعمل buildLikeTerms(query) لبناء نمط LIKE المُطبّع والمُهرّب. يُستخدم
- * النمط نفسه للحقلين (title و content). سلامة المعاملات (Property 3):
- * علامتا `?` ↔ معاملان ([pattern, pattern]).
+ * الخيار (أ) — تطبيع الطرفين + مطابقة كلمة‑كلمة:
+ * - **تطبيع الطرفين**: يُطبّع العمود داخل SQL عبر sqlNormalize بنفس قواعد تطبيع
+ *   الاستعلام، فيختفي خلل «تطبيع النمط دون العمود» الذي كان يُرجع 0 لأي كلمة
+ *   فيها ة/همزات/ى (مثل «زيارة عرفة»).
+ * - **كلمة‑كلمة (AND)**: تُقسَّم العبارة إلى رموز، ويُشترط وجود كلٍّ منها في
+ *   العنوان أو المحتوى (بأي ترتيب ولو متباعدة)، بدل العبارة المتلاصقة.
  *
- * حالة العبارة الفارغة: عند عدم إنتاج buildLikeTerms لأي نمط (عبارة فارغة
- * بعد التطبيع)، نُعيد نمطاً محايداً `"%"` للحقلين للحفاظ على بنية استعلام
- * سليمة وثابت سلامة المعاملات. رفض العبارة الفارغة منطقياً هو مسؤولية
- * المتصل (count_mentions) قبل استدعاء matchClause (Requirement 10.2)؛
- * هذا السلوك المحايد هنا مجرّد شبكة أمان لبنية SQL.
+ * سلامة المعاملات (Property 3): لكل رمز علامتا `?` ↔ معاملان ([pattern, pattern]).
+ * العبارة الفارغة (بلا رموز) → sql فارغ وparams فارغة (لا تقييد إضافي)؛ رفض
+ * العبارة الفارغة منطقياً مسؤولية المتصل (count_mentions).
  *
  * @param query عبارة البحث الخام.
- * @returns جزء SQL ومعاملاته (معاملان مقابل علامتَي `?`).
+ * @returns جزء SQL ومعاملاته (معاملان لكل رمز).
  */
 export function matchClause(query: string): { sql: string; params: string[] } {
-  const terms = buildLikeTerms(query)
-  const pattern = terms.length > 0 ? terms[0] : "%"
-  return {
-    sql: "AND (title LIKE ? OR content LIKE ?)",
-    params: [pattern, pattern],
+  const tokens = buildQueryTokens(query)
+  if (tokens.length === 0) return { sql: "", params: [] }
+
+  // حدّ الكلمة يساراً: نسبق النصّ المُطبّع بمسافة (CONCAT) ونطلب مسافة قبل الرمز
+  // (النمط "% رمز%")، فنستبعد التصادمات مثل «عرفة» داخل «معرفة» مع الإبقاء على
+  // مطابقة الكلمة أينما وردت مسبوقةً بمسافة (بما في ذلك أوّل النصّ بعد الـ CONCAT).
+  const tNorm = `CONCAT(' ', ${sqlNormalize("title")})`
+  const cNorm = `CONCAT(' ', ${sqlNormalize("content")})`
+  const parts: string[] = []
+  const params: string[] = []
+  for (const tok of tokens) {
+    parts.push(`AND (${tNorm} LIKE ? OR ${cNorm} LIKE ?)`)
+    const pattern = "% " + escapeLike(tok) + "%" // مسافة قبل الرمز = حدّ كلمة يساري
+    params.push(pattern, pattern)
   }
+  return { sql: parts.join(" "), params }
 }
 
 // ─────────────────────────────────────────────────────────────────────

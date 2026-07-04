@@ -24,6 +24,7 @@ interface AdminSection { key: string; label: string; href: string; icon: string 
 const ADMIN_SECTIONS: AdminSection[] = [
   { key: "analytics",  label: "التحليلات",   href: "/admin",            icon: "📊" },
   { key: "exceptions", label: "الاستثناءات", href: "/admin/exceptions", icon: "⚠️" },
+  { key: "knowledge",  label: "قاعدة المعرفة", href: "/admin/knowledge", icon: "📚" },
   // أقسام مستقبلية تُضاف هنا فقط، مثل:
   // { key: "contacts", label: "جهات الاتصال", href: "/admin/contacts", icon: "📇" },
 ]

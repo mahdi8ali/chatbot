@@ -2,7 +2,7 @@
  * contacts-service.ts — بيانات التواصل من جداول `contact_main` و `contact_divisions`
  */
 
-import { APICallResult, getPool } from "./db"
+import { APICallResult, getPool, fuzzyNorm, levenshtein } from "./db"
 
 export async function searchContacts(query?: string): Promise<APICallResult> {
   try {
@@ -56,7 +56,21 @@ export async function searchContacts(query?: string): Promise<APICallResult> {
       const words = normalize(query).split(/\s+/).filter(w => w.length > 1)
       divisions = divisions.filter(d => {
         const text = normalize([d.title, d.address, ...d.contacts.map((c: any) => c.name + " " + (c.title || ""))].join(" "))
-        return words.some(w => text.includes(w))
+        // مطابقة حرفية: أي كلمة موجودة في النص
+        if (words.some(w => text.includes(w))) return true
+        // مطابقة تقريبية: Levenshtein على كلمات العنوان (للأخطاء الإملائية)
+        const titleWords = text.split(/\s+/).filter(Boolean)
+        for (const w of words) {
+          if (w.length < 4) continue
+          const nw = fuzzyNorm(w)
+          const maxDist = nw.length <= 5 ? 1 : 2
+          for (const tw of titleWords) {
+            const ntw = fuzzyNorm(tw)
+            if (Math.abs(ntw.length - nw.length) > maxDist) continue
+            if (levenshtein(nw, ntw, maxDist) <= maxDist) return true
+          }
+        }
+        return false
       })
     }
 
