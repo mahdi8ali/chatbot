@@ -36,6 +36,11 @@ export default function MessageList({
   const [lbImages, setLbImages] = useState<LightboxImage[]>([])
   const [lbIndex, setLbIndex] = useState(0)
 
+  // تمرير تلقائي للأسفل عند إضافة رسائل جديدة أو أثناء البث
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages, isStreaming, isLoading])
+
   const lbOpen = lbImages.length > 0
   const lbCurrent = lbImages[lbIndex]
 

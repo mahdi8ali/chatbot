@@ -39,11 +39,14 @@ export async function siteSearch(
 ): Promise<APICallResult> {
   const t0 = Date.now()
 
-  const wantNews     = !source || source === "news"
-  const wantSira     = !source || source === "sira"
-  const wantHistory  = !source || source === "history"
-  const wantVideo    = !source || source === "video"
-  const wantProjects = !source || source === "project"
+  // عند الترتيب حسب المشاهدات بدون تحديد مصدر → افتراضياً أخبار فقط
+  const effectiveSource = source || ((sortBy === "views" || sortBy === "views_asc") ? "news" : undefined)
+
+  const wantNews     = !effectiveSource || effectiveSource === "news"
+  const wantSira     = !effectiveSource || effectiveSource === "sira"
+  const wantHistory  = !effectiveSource || effectiveSource === "history"
+  const wantVideo    = !effectiveSource || effectiveSource === "video"
+  const wantProjects = !effectiveSource || effectiveSource === "project"
 
   const [newsResult, abbasResult, historyResult, videoResult, projectsResult] = await Promise.all([
     wantNews     ? getAllNews()      : Promise.resolve<APICallResult>({ success: true, data: [] }),
@@ -95,6 +98,9 @@ export async function siteSearch(
       // ترتيب حسب المشاهدات إذا طُلب
       if (sortBy === "views") {
         return (b.item.views || 0) - (a.item.views || 0)
+      }
+      if (sortBy === "views_asc") {
+        return (a.item.views || 0) - (b.item.views || 0)
       }
       // الترتيب الافتراضي: الصلة ثم التاريخ
       if (b.score !== a.score) return b.score - a.score

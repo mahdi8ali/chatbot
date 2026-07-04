@@ -40,8 +40,8 @@ export const TOOL_SEARCH_PROJECTS: ChatCompletionTool = {
         },
         sort_by: {
           type: "string",
-          description: "ترتيب النتائج: relevance (افتراضي حسب الصلة) أو views (الأكثر مشاهدة أولاً).",
-          enum: ["relevance", "views"]
+          description: "ترتيب النتائج: relevance (افتراضي حسب الصلة) أو views (الأكثر مشاهدة) أو views_asc (الأقل مشاهدة).",
+          enum: ["relevance", "views", "views_asc"]
         },
         from_date: {
           type: "string",
