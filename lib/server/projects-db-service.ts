@@ -280,24 +280,35 @@ export async function searchProjectsDB(params: {
 
     const limit = params.limit || 8
     const useFuzzy = filtered.length === 0 && fuzzyResults.length > 0
+
+    // استخراج العنوان من الخصائص عندما address فارغ
+    function extractAddress(row: ProjectRow): string | null {
+      if (row.address) return row.address
+      const props = row.properties_text || ""
+      // البحث عن نمط "محافظة" أو عنوان جغرافي في الخصائص
+      const match = props.match(/(محافظة[^\s]*(?:\s+[^\n|]+)?)/)
+      if (match) return match[1].trim()
+      return null
+    }
+
     const results = (useFuzzy
       ? fuzzyResults.slice(0, limit).map(fr => ({
           id: fr.row.id,
           name: fr.row.name,
           description_snippet: excerpt(fr.row.description, 300),
           section: fr.row.section_name || "عام",
-          address: fr.row.address || null,
+          address: extractAddress(fr.row),
           url: projectUrl(fr.row.id),
           section_url: sectionUrl(fr.row.section_id),
           news_url: fr.row.news_url || null,
-          correction: fr.corrections,  // ← تلقائي: {"العنيد":"العميد", ...}
+          correction: fr.corrections,
         }))
       : filtered.slice(0, limit).map(row => ({
           id: row.id,
           name: row.name,
           description_snippet: excerpt(row.description, 300),
           section: row.section_name || "عام",
-          address: row.address || null,
+          address: extractAddress(row),
           url: projectUrl(row.id),
           section_url: sectionUrl(row.section_id),
           news_url: row.news_url || null,
