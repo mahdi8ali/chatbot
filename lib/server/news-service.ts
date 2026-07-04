@@ -69,6 +69,7 @@ function mapNewsToItem(row: NewsRow) {
     name: row.title,
     description,
     sections: [{ name: categoryName }],
+    type_name: row.type_name || null,
     properties: [
       row.title_2 ? { name: "العنوان الفرعي", value: row.title_2 } : null,
       row.photo_comment ? { name: "تعليق الصورة", value: row.photo_comment } : null,
@@ -168,14 +169,25 @@ export async function siteGetStatistics(): Promise<APICallResult> {
   const data = (allNews.data as any[]) || []
   const sectionCounts = new Map<string, number>()
   const typeCounts = new Map<string, number>()
+  const typeDates = new Map<string, { oldest: string; newest: string }>()
   for (const item of data) {
     for (const s of item.sections || []) {
       const name = s.name || "غير مصنف"
       sectionCounts.set(name, (sectionCounts.get(name) || 0) + 1)
     }
-    // عدد حسب النوع (type_name من news_type)
     const typeName = item.type_name || "أخبار شبكة الكفيل"
     typeCounts.set(typeName, (typeCounts.get(typeName) || 0) + 1)
+    // تتبع أقدم وأحدث تاريخ لكل نوع
+    const date = item.created_at ? new Date(item.created_at).toISOString().split("T")[0] : null
+    if (date) {
+      const existing = typeDates.get(typeName)
+      if (!existing) {
+        typeDates.set(typeName, { oldest: date, newest: date })
+      } else {
+        if (date < existing.oldest) existing.oldest = date
+        if (date > existing.newest) existing.newest = date
+      }
+    }
   }
   const top_sections = Array.from(sectionCounts.entries())
     .sort((a, b) => b[1] - a[1])
@@ -183,7 +195,10 @@ export async function siteGetStatistics(): Promise<APICallResult> {
     .map(([section, count]) => ({ section, count }))
   const by_type = Array.from(typeCounts.entries())
     .sort((a, b) => b[1] - a[1])
-    .map(([type, count]) => ({ type, count }))
+    .map(([type, count]) => {
+      const dates = typeDates.get(type)
+      return { type, count, ...(dates && { oldest: dates.oldest, newest: dates.newest }) }
+    })
   return {
     success: true,
     data: { total_projects: data.length, top_sections, sections_count: sectionCounts.size, by_type }

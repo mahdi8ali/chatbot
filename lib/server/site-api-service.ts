@@ -87,13 +87,20 @@ export async function siteSearch(
 
   const t1 = Date.now()
   // نحسب كل المطابقات أولاً (قبل القصّ) — ليكون العدد الحقيقي متاحاً لأسئلة "كم عدد..."
-  const matched = dateFiltered
+  let matched = dateFiltered
     .map(item => ({ item, score: scoreItem(item, words, wordRoots, wordSkeletons, safeQuery, sectionLower) }))
     .filter(x => (words.length ? x.score >= 3 : true))
     .sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score
       return (b.item.created_at_ts || 0) - (a.item.created_at_ts || 0)
     })
+
+  // إذا لم توجد نتائج وكان الفلتر بالـ type فقط (بدون كلمة بحث مطابقة) → أرجع كل عناصر النوع
+  if (matched.length === 0 && type && dateFiltered.length > 0) {
+    matched = dateFiltered
+      .map(item => ({ item, score: 1 }))
+      .sort((a, b) => (b.item.created_at_ts || 0) - (a.item.created_at_ts || 0))
+  }
 
   const totalMatches = matched.length
   // النتائج المعروضة مقتصّة (لتوفير الـ tokens)، لكن total يعكس العدد الكامل للمطابقات
