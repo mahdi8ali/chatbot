@@ -33,7 +33,8 @@ export async function siteSearch(
   limit: number = 5,
   source?: string,
   fromDate?: string,
-  toDate?: string
+  toDate?: string,
+  type?: string
 ): Promise<APICallResult> {
   const t0 = Date.now()
 
@@ -75,6 +76,13 @@ export async function siteSearch(
       const ts = item.created_at_ts || (item.created_at ? new Date(item.created_at).getTime() : 0)
       return ts >= fromTs && ts <= toTs
     })
+  }
+
+  // فلترة حسب نوع المحتوى (إذا حُدّد)
+  if (type) {
+    dateFiltered = dateFiltered.filter(item =>
+      (item.type_name || "").toLowerCase() === type.toLowerCase()
+    )
   }
 
   const t1 = Date.now()
@@ -174,7 +182,7 @@ export async function executeToolByName(
   try {
     switch (toolName) {
       case "search_projects":
-        return await siteSearch(args.query, args.section, undefined, args.source, args.from_date, args.to_date)
+        return await siteSearch(args.query, args.section, undefined, args.source, args.from_date, args.to_date, args.type)
       case "get_project_by_id":
         return await siteGetProject(args.id)
       case "filter_projects":

@@ -271,7 +271,8 @@ async function processToolCall(
   if (toolName === "count_news") {
     const r = await countNews({
       spec: { period: args.period, lastDays: args.last_days, from: args.from, to: args.to },
-      categoryId: args.category_id
+      categoryId: args.category_id,
+      typeId: args.type_id
     })
     return {
       tool_call_id: toolCallId,

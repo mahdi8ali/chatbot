@@ -763,11 +763,16 @@ export async function topTopics(params: {
 export async function countNews(params: {
   spec: PeriodSpec
   categoryId?: number
+  typeId?: number
 }): Promise<CountNewsResult> {
   const window = resolvePeriod(params.spec)
   const categoryId =
     params?.categoryId !== undefined && params.categoryId !== null && Number.isFinite(Number(params.categoryId))
       ? Number(params.categoryId)
+      : null
+  const typeId =
+    params?.typeId !== undefined && params.typeId !== null && Number.isFinite(Number(params.typeId))
+      ? Number(params.typeId)
       : null
 
   if (isEmptyWindow(window)) {
@@ -779,9 +784,11 @@ export async function countNews(params: {
     const win = windowClause(window)
 
     const categorySql = categoryId !== null ? " AND category_id = ?" : ""
-    const sql = `SELECT COUNT(*) AS total FROM news WHERE ${BASE_WHERE} ${win.sql}${categorySql}`
+    const typeSql = typeId !== null ? " AND type_id = ?" : ""
+    const sql = `SELECT COUNT(*) AS total FROM news WHERE ${BASE_WHERE} ${win.sql}${categorySql}${typeSql}`
     const sqlParams: (string | number | null)[] = [...win.params]
     if (categoryId !== null) sqlParams.push(categoryId)
+    if (typeId !== null) sqlParams.push(typeId)
 
     const [rows] = await db.execute<CountRow[]>(sql, sqlParams)
     const total = Number(rows?.[0]?.total ?? 0)

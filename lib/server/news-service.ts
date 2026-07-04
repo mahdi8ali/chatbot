@@ -20,6 +20,8 @@ interface NewsRow extends RowDataPacket {
   photo_comment: string | null
   active: number
   category_id: number | null
+  type_id: number | null
+  type_name: string | null
   created_at: string | null
   updated_at: string | null
 }
@@ -30,7 +32,7 @@ function getNewsUrl(id: number): string {
 }
 
 function mapNewsToItem(row: NewsRow) {
-  const categoryName = row.category_id ? `تصنيف ${row.category_id}` : "أخبار شبكة الكفيل"
+  const categoryName = row.type_name || (row.category_id ? `تصنيف ${row.category_id}` : "أخبار شبكة الكفيل")
   const strippedContent = stripHtml(row.content || "")
   const description = strippedContent.length <= 2500 ? strippedContent : strippedContent.slice(0, 2500) + "..."
 
@@ -96,9 +98,12 @@ export async function getAllNews(): Promise<APICallResult> {
     const db = getPool()
     const t0 = Date.now()
     const [rows] = await db.query<NewsRow[]>(
-      `SELECT id, title, title_2, image, content, views, photo_comment, active, category_id, created_at, updated_at
-       FROM news
-       WHERE active = 1 AND deleted_at IS NULL`
+      `SELECT n.id, n.title, n.title_2, n.image, n.content, n.views, n.photo_comment,
+              n.active, n.category_id, n.type_id, nt.name AS type_name,
+              n.created_at, n.updated_at
+       FROM news n
+       LEFT JOIN news_type nt ON nt.id = n.type_id
+       WHERE n.active = 1 AND n.deleted_at IS NULL`
     )
     console.log(`[Timing] DB query: ${Date.now() - t0}ms (${rows.length} rows)`)
     const t1 = Date.now()
@@ -162,19 +167,26 @@ export async function siteGetStatistics(): Promise<APICallResult> {
 
   const data = (allNews.data as any[]) || []
   const sectionCounts = new Map<string, number>()
+  const typeCounts = new Map<string, number>()
   for (const item of data) {
     for (const s of item.sections || []) {
       const name = s.name || "غير مصنف"
       sectionCounts.set(name, (sectionCounts.get(name) || 0) + 1)
     }
+    // عدد حسب النوع (type_name من news_type)
+    const typeName = item.type_name || "أخبار شبكة الكفيل"
+    typeCounts.set(typeName, (typeCounts.get(typeName) || 0) + 1)
   }
   const top_sections = Array.from(sectionCounts.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
     .map(([section, count]) => ({ section, count }))
+  const by_type = Array.from(typeCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([type, count]) => ({ type, count }))
   return {
     success: true,
-    data: { total_projects: data.length, top_sections, sections_count: sectionCounts.size }
+    data: { total_projects: data.length, top_sections, sections_count: sectionCounts.size, by_type }
   }
 }
 
