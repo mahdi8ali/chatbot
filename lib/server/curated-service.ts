@@ -106,6 +106,17 @@ export async function seed(): Promise<void> {
       "منقول من كتلة استثناء system-prompts.ts — موقف فقهي مستند إلى بحث منشور",
     ]
   )
+
+  // 3) بذرة هوية البوت (المنقولة من system-prompts.ts) — أعلى أولوية
+  await db.execute(
+    `INSERT INTO curated_answers (category, patterns, answer, url, priority, note)
+     VALUES ('stance', ?, ?, NULL, 20, ?)`,
+    [
+      JSON.stringify(["من صنعك", "من برمجك", "من طورك", "من صممك", "من انشأك", "صنعك", "برمجك", "صممك"]),
+      "طوّرتني وحدة الذكاء الاصطناعي — قسم الإعلام في العتبة العباسية المقدسة.",
+      "هوية البوت — منقولة من system-prompts.ts",
+    ]
+  )
 }
 
 // ===== الكاش الداخلي مع TTL =====
