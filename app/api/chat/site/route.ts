@@ -18,7 +18,9 @@ import { ServerRuntime } from "next"
 import OpenAI from "openai"
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions.mjs"
 
-export const runtime: ServerRuntime = "edge"
+// ⚠️ يجب أن يكون nodejs (وليس edge) لأن الاتصال بـ MySQL عبر mysql2 يتطلب
+// مقابس TCP الخاصة بـ Node.js غير المتاحة في edge runtime.
+export const runtime: ServerRuntime = "nodejs"
 
 /**
  * CORS Headers - السماح فقط من دومين محدد

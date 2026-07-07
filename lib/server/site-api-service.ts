@@ -8,6 +8,7 @@
 import { getSiteAPIConfig } from "./site-api-config"
 import type { AllowedToolName } from "./site-tools-definitions"
 import { sanitizeAPIResponse } from "./data-sanitizer"
+import { getNewsCount, type NewsCountScope } from "./news-service"
 
 /**
  * إعدادات Timeout و Retry
@@ -607,6 +608,25 @@ export async function executeToolByName(
 
       case "get_statistics":
         return await siteGetStatistics()
+
+      case "get_news_count": {
+        const scope: NewsCountScope =
+          args.scope === "content" ? "content" : "title"
+        const activeOnly = args.active_only !== false
+        const result = await getNewsCount(args.query, scope, activeOnly)
+        return {
+          success: result.success,
+          data: result.success
+            ? {
+                count: result.count,
+                query: result.query,
+                scope: result.scope,
+                active_only: result.activeOnly
+              }
+            : undefined,
+          error: result.error
+        }
+      }
 
       default:
         return {

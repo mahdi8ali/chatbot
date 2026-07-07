@@ -134,6 +134,42 @@ export const TOOL_GET_STATISTICS: ChatCompletionTool = {
 }
 
 /**
+ * أداة عدّ الأخبار — تُرجع عدداً دقيقاً حتمياً من قاعدة البيانات
+ *
+ * الاستخدام: عندما يسأل المستخدم "كم خبر ..." أو عن عدد الأخبار المتعلقة بموضوع/عبارة.
+ * العدّ يعتمد COUNT(*) حقيقي على جدول الأخبار — لا يجوز اختلاق الرقم.
+ */
+export const TOOL_GET_NEWS_COUNT: ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "get_news_count",
+    description:
+      "عدّ الأخبار المطابِقة لعبارة أو موضوع في شبكة الكفيل العالمية. يُرجع عدداً دقيقاً من قاعدة البيانات. استخدمها لأي سؤال عن (كم خبر / عدد الأخبار) حول موضوع أو قسم.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description:
+            "العبارة أو الموضوع المراد عدّ أخباره (مثل: المجمع العلمي للقرآن الكريم)"
+        },
+        scope: {
+          type: "string",
+          enum: ["title", "content"],
+          description:
+            "أساس العدّ: title = مطابقة في العنوان (افتراضي وأدق)، content = مطابقة في نص الخبر (أوسع)"
+        },
+        active_only: {
+          type: "boolean",
+          description: "عدّ الأخبار المنشورة فقط (افتراضي: true)"
+        }
+      },
+      required: ["query"]
+    }
+  }
+}
+
+/**
  * قائمة جميع الأدوات المتاحة
  */
 export const ALL_SITE_TOOLS: ChatCompletionTool[] = [
@@ -141,7 +177,8 @@ export const ALL_SITE_TOOLS: ChatCompletionTool[] = [
   TOOL_GET_PROJECT_BY_ID,
   TOOL_FILTER_PROJECTS,
   TOOL_GET_LATEST_PROJECTS,
-  TOOL_GET_STATISTICS
+  TOOL_GET_STATISTICS,
+  TOOL_GET_NEWS_COUNT
 ]
 
 /**
@@ -152,7 +189,8 @@ export const ALLOWED_TOOL_NAMES = [
   "get_project_by_id",
   "filter_projects",
   "get_latest_projects",
-  "get_statistics"
+  "get_statistics",
+  "get_news_count"
 ] as const
 
 export type AllowedToolName = (typeof ALLOWED_TOOL_NAMES)[number]
