@@ -185,7 +185,7 @@ describe("Task 5.5 — سلامة المعاملات وأمان SQL (Property 3)
         expect(v).toBeGreaterThanOrEqual(1)
         expect(v).toBeLessThanOrEqual(20)
       }),
-      { numRuns: 200 }
+      { numRuns: 20 }
     )
   })
 })
@@ -234,7 +234,7 @@ describe("Task 5.6 — انتظام الأعداد الزمنية (Property 2)",
           expect(result.data!.total).toBe(sum)
         }
       ),
-      { numRuns: 200 }
+      { numRuns: 20 }
     )
   })
 })

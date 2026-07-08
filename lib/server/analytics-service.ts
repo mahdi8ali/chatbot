@@ -57,6 +57,8 @@ export interface CountMentionsResult {
     window: ResolvedWindow
     basis: AnalyticsBasis
     sample?: Array<{ id: number; title: string; created_at: string; url: string }>
+    latest_available?: string  // أحدث created_at (YYYY-MM-DD) — يُرفَق فقط عند total=0 بنافذة محدّدة (التغيير 8)
+    no_data_in_window?: boolean // النافذة لاحقة كلياً لأحدث بيانات القاعدة (تمييز «لا بيانات» عن «لا ذكر»)
   }
   error?: string
 }
@@ -94,6 +96,10 @@ export interface CountNewsResult {
     total: number
     window: ResolvedWindow
     category_id?: number | null
+    query_used?: string
+    basis?: AnalyticsBasis      // يُرفَق عند العدّ بكلمة (query) لتوضيح أن الرقم تقريبي (التغيير 2)
+    latest_available?: string   // أحدث created_at (YYYY-MM-DD) عند total=0 بنافذة محدّدة (التغيير 8)
+    no_data_in_window?: boolean // النافذة لاحقة كلياً لأحدث بيانات القاعدة (التغيير 8)
   }
   error?: string
 }
@@ -406,14 +412,47 @@ function sqlNormalize(col: string): string {
 }
 
 /**
+ * يجرّد بادئة «ال» التعريفية من بداية رمز مطبّع (التغيير 6).
+ * يُطبَّق على مستوى الرمز المُقسَّم (فيقع عند حدّ كلمة يقيناً)، ولا يُجرّد إلّا
+ * إذا بقي بعده حرفان على الأقل (كي لا نُفرغ رموزاً قصيرة مثل «ال» وحدها).
+ */
+function stripArabicArticle(token: string): string {
+  if (token.startsWith("ال") && token.length >= 4) return token.slice(2)
+  return token
+}
+
+/**
+ * الألقاب/كلمات التوقّف الدينية والشرفية (التغيير 7) — بصيغتها المطبّعة
+ * المجرّدة من «ال» (متّسقةً مع stripArabicArticle)، تُسقَط من الرموز
+ * الإلزامية كي لا يُصفّر لقبٌ واحد نتيجة العدّ كلّها (مثل «سيد احمد الصافي»).
+ */
+const AR_TITLE_STOPWORDS: ReadonlySet<string> = new Set([
+  "سيد", "سماحه", "سماحته", "شيخ", "ايه", "له", "فضيله", "علامه", "حاج", "سماحة",
+])
+
+/**
  * يقسّم عبارة البحث (بعد التطبيع الخفيف) إلى رموز (كلمات) فريدة بطول ≥ 2.
+ * التغيير 6: يجرّد بادئة «ال» من كل رمز (تطابق «صافي»↔«الصافي»).
+ * التغيير 7: يُسقِط الألقاب/كلمات التوقّف من الرموز الإلزامية، مع حماية
+ *   «لا تُسقِط الكل»: إن كانت العبارة كلّها ألقاباً يُحتفظ بالرموز قبل الترشيح.
  * عند غياب رموز معتدّ بها (لكن العبارة غير فارغة) يعيد العبارة المطبّعة كرمز واحد.
  */
 export function buildQueryTokens(query: string): string[] {
   const normalized = normalizeArabicLight(query || "")
   if (normalized === "") return []
-  const toks = Array.from(new Set(normalized.split(/\s+/).filter((t) => t.length >= 2)))
-  return toks.length > 0 ? toks : [normalized]
+  const raw = Array.from(
+    new Set(
+      normalized
+        .split(/\s+/)
+        .filter((t) => t.length >= 2)
+        .map(stripArabicArticle)
+        .filter((t) => t.length >= 2)
+    )
+  )
+  if (raw.length === 0) return [normalized]
+  const filtered = raw.filter((t) => !AR_TITLE_STOPWORDS.has(t))
+  // حماية «لا تُسقِط الكل»: إن أزال الترشيح كل الرموز (العبارة كلّها ألقاب) نُبقي raw.
+  return filtered.length > 0 ? filtered : raw
 }
 
 /**
@@ -440,8 +479,12 @@ export function matchClause(query: string): { sql: string; params: string[] } {
   // حدّ الكلمة يساراً: نسبق النصّ المُطبّع بمسافة (CONCAT) ونطلب مسافة قبل الرمز
   // (النمط "% رمز%")، فنستبعد التصادمات مثل «عرفة» داخل «معرفة» مع الإبقاء على
   // مطابقة الكلمة أينما وردت مسبوقةً بمسافة (بما في ذلك أوّل النصّ بعد الـ CONCAT).
-  const tNorm = `CONCAT(' ', ${sqlNormalize("title")})`
-  const cNorm = `CONCAT(' ', ${sqlNormalize("content")})`
+  // التغيير 6: نجرّد بادئة «ال» على مستوى حدّ الكلمة عبر REPLACE(' ال', ' ')
+  // على التعبير المسبوق بالمسافة (فتُلتقَط «ال» في أوّل كلمة أيضاً)، بتماثل حرفي
+  // مع stripArabicArticle على جانب الرموز، فيتطابق «صافي»↔«الصافي» و«سيد»↔«السيد».
+  const stripCol = (col: string) => `REPLACE(CONCAT(' ', ${sqlNormalize(col)}), ' ال', ' ')`
+  const tNorm = stripCol("title")
+  const cNorm = stripCol("content")
   const parts: string[] = []
   const params: string[] = []
   for (const tok of tokens) {
@@ -542,6 +585,42 @@ function isEmptyWindow(w: ResolvedWindow): boolean {
   return w.from !== null && w.to !== null && w.from > w.to
 }
 
+/** هل النافذة محدّدة (لها حدّ زمني)؟ — أي ليست «كل الفترات» (from=to=null). */
+function isBoundedWindow(w: ResolvedWindow): boolean {
+  return w.from !== null || w.to !== null
+}
+
+/**
+ * يُرجع أحدث تاريخ متاح في أخبار الأساس بصيغة YYYY-MM-DD (أو null عند الفشل/الفراغ).
+ * (التغيير 8) يُستخدم فقط على مسار الصفر بنافذة محدّدة لتمييز «لا بيانات» عن «لا ذكر».
+ */
+async function latestAvailableDate(): Promise<string | null> {
+  try {
+    const [rows] = await getPool().execute<RowDataPacket[]>(
+      `SELECT DATE_FORMAT(MAX(created_at), '%Y-%m-%d') AS d FROM news WHERE ${BASE_WHERE}`
+    )
+    const d = (rows as any[])?.[0]?.d
+    return d ? String(d) : null
+  } catch (err) {
+    console.error("[analytics] latestAvailableDate فشل الاستعلام:", err)
+    return null
+  }
+}
+
+/**
+ * يبني حقول التمييز عند العدّ الصفري بنافذة محدّدة (التغيير 8):
+ * يُرفِق `latest_available`، ويحدّد `no_data_in_window` إذا كانت النافذة لاحقةً
+ * كلياً لأحدث بيانات القاعدة (window.from > latest_available) — أي «لا بيانات»
+ * لا «لا ذكر». يُستدعى حصراً على مسار total=0 بنافذة محدّدة.
+ */
+async function zeroWindowInfo(w: ResolvedWindow): Promise<{ latest_available?: string; no_data_in_window?: boolean }> {
+  const latest = await latestAvailableDate()
+  if (!latest) return {}
+  const fromDay = w.from ? w.from.slice(0, 10) : null
+  const noData = fromDay !== null && fromDay > latest
+  return { latest_available: latest, no_data_in_window: noData }
+}
+
 // ── (أ) count_mentions — عدّ الذكر ضمن نافذة زمنية ─────────────────────
 interface CountRow extends RowDataPacket {
   total: number
@@ -609,13 +688,15 @@ export async function countMentions(params: {
         created_at: toCreatedAtString(row.created_at),
         url: buildNewsUrl(Number(row.id)),
       }))
+      const zeroInfoS = (total === 0 && isBoundedWindow(window)) ? await zeroWindowInfo(window) : {}
       return {
         success: true,
-        data: { query, total, window, basis: KEYWORD_BASIS, sample: mapped },
+        data: { query, total, window, basis: KEYWORD_BASIS, sample: mapped, ...zeroInfoS },
       }
     }
 
-    return { success: true, data: { query, total, window, basis: KEYWORD_BASIS } }
+    const zeroInfo = (total === 0 && isBoundedWindow(window)) ? await zeroWindowInfo(window) : {}
+    return { success: true, data: { query, total, window, basis: KEYWORD_BASIS, ...zeroInfo } }
   } catch (err) {
     console.error("[analytics] countMentions فشل الاستعلام:", err)
     return { success: false, error: DB_ERROR_MESSAGE }
@@ -764,6 +845,7 @@ export async function countNews(params: {
   spec: PeriodSpec
   categoryId?: number
   typeId?: number
+  query?: string
 }): Promise<CountNewsResult> {
   const window = resolvePeriod(params.spec)
   const categoryId =
@@ -774,6 +856,7 @@ export async function countNews(params: {
     params?.typeId !== undefined && params.typeId !== null && Number.isFinite(Number(params.typeId))
       ? Number(params.typeId)
       : null
+  const query = params?.query?.trim() || null
 
   if (isEmptyWindow(window)) {
     return { success: true, data: { total: 0, window, category_id: categoryId } }
@@ -785,15 +868,28 @@ export async function countNews(params: {
 
     const categorySql = categoryId !== null ? " AND category_id = ?" : ""
     const typeSql = typeId !== null ? " AND type_id = ?" : ""
-    const sql = `SELECT COUNT(*) AS total FROM news WHERE ${BASE_WHERE} ${win.sql}${categorySql}${typeSql}`
+    // التغيير 1: توحيد الدلالة — نستخدم نفس matchClause المطبّع (تطبيع «ال»
+    // + إسقاط الألقاب + كلمة‑كلمة AND + حدّ كلمة) بدل LIKE الخام، فيتطابق
+    // count_news(query) مع count_mentions تماماً على نفس النافذة.
+    const match = query ? matchClause(query) : { sql: "", params: [] as string[] }
+    const sql = `SELECT COUNT(*) AS total FROM news WHERE ${BASE_WHERE} ${win.sql}${categorySql}${typeSql} ${match.sql}`
+    // ترتيب المعاملات مطابق لترتيب ظهور علامات `?`: النافذة، ثم category_id، ثم type_id، ثم رموز matchClause.
     const sqlParams: (string | number | null)[] = [...win.params]
     if (categoryId !== null) sqlParams.push(categoryId)
     if (typeId !== null) sqlParams.push(typeId)
+    sqlParams.push(...match.params)
 
     const [rows] = await db.execute<CountRow[]>(sql, sqlParams)
     const total = Number(rows?.[0]?.total ?? 0)
 
-    return { success: true, data: { total, window, category_id: categoryId } }
+    // التغيير 2: عند العدّ بكلمة (query) نُرفِق basis ليُعرَض الرقم كتقدير لا كإحصاء رسمي.
+    const basis = query ? { basis: KEYWORD_BASIS } : {}
+    // التغيير 8: عند total=0 بنافذة محدّدة نُرفِق latest_available ونميّز «لا بيانات» عن «لا ذكر».
+    const zeroInfo = (total === 0 && isBoundedWindow(window)) ? await zeroWindowInfo(window) : {}
+    return {
+      success: true,
+      data: { total, window, category_id: categoryId, query_used: query || undefined, ...basis, ...zeroInfo },
+    }
   } catch (err) {
     console.error("[analytics] countNews فشل الاستعلام:", err)
     return { success: false, error: DB_ERROR_MESSAGE }

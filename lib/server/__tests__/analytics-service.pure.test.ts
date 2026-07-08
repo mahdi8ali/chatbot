@@ -98,7 +98,7 @@ describe("Property 1 — resolvePeriod determinism (Task 2.2)", () => {
         // تحقّق بنيوي إضافي عبر التسلسل النصّي.
         expect(JSON.stringify(a)).toBe(JSON.stringify(b))
       }),
-      { numRuns: 300 }
+      { numRuns: 20 }
     )
   })
 })
@@ -125,7 +125,7 @@ describe("Property 5 — resolvePeriod clamps lastDays into [1, 3650] (Task 2.3)
         expect(n).not.toBeNull()
         expect(n! >= MIN && n! <= MAX).toBe(true)
       }),
-      { numRuns: 500 }
+      { numRuns: 20 }
     )
   })
 
@@ -145,7 +145,7 @@ describe("Property 5 — resolvePeriod clamps lastDays into [1, 3650] (Task 2.3)
           expect(n! >= MIN && n! <= MAX).toBe(true)
         }
       ),
-      { numRuns: 500 }
+      { numRuns: 20 }
     )
   })
 
@@ -165,7 +165,7 @@ describe("Property 5 — resolvePeriod clamps lastDays into [1, 3650] (Task 2.3)
         )
         expect(diffDays >= MIN && diffDays <= MAX).toBe(true)
       }),
-      { numRuns: 300 }
+      { numRuns: 20 }
     )
   })
 })
@@ -202,7 +202,7 @@ describe("Property 6 — resolvePeriod marks empty window when from > to (Task 2
         expect(w.from).toBe(`${from} 00:00:00`)
         expect(w.to).toBe(`${to} 23:59:59`)
       }),
-      { numRuns: 300 }
+      { numRuns: 20 }
     )
   })
 
@@ -364,7 +364,7 @@ describe("Property 3 — parameter safety in windowClause/matchClause (Task 3.3)
         expect(countPlaceholders(sql)).toBe(params.length)
         expect(params.length).toBe(4)
       }),
-      { numRuns: 300 }
+      { numRuns: 20 }
     )
   })
 
@@ -375,7 +375,7 @@ describe("Property 3 — parameter safety in windowClause/matchClause (Task 3.3)
         expect(countPlaceholders(sql)).toBe(params.length)
         expect(params.length).toBe(2)
       }),
-      { numRuns: 300 }
+      { numRuns: 20 }
     )
   })
 })

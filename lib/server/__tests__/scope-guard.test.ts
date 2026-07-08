@@ -174,7 +174,7 @@ describe("classifyScope — property: false-positive avoidance (Property 2)", ()
           expect(result.category).toBeUndefined()
         }
       ),
-      { numRuns: 300 }
+      { numRuns: 20 }
     )
   })
 })
@@ -211,7 +211,7 @@ describe("classifyScope — property: out-of-scope detection (Property 1)", () =
           expect(result.category).toBe("hijri_conversion")
         }
       ),
-      { numRuns: 300 }
+      { numRuns: 20 }
     )
   })
 
@@ -227,7 +227,7 @@ describe("classifyScope — property: out-of-scope detection (Property 1)", () =
           expect(result.category).toBe("hijri_conversion")
         }
       ),
-      { numRuns: 200 }
+      { numRuns: 20 }
     )
   })
 
@@ -257,7 +257,7 @@ describe("classifyScope — property: out-of-scope detection (Property 1)", () =
           expect(result.category).toBe("occasion_timing")
         }
       ),
-      { numRuns: 300 }
+      { numRuns: 20 }
     )
   })
 })

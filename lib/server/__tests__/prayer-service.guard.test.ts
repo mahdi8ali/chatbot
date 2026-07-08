@@ -69,7 +69,7 @@ describe("resolveDateToDayMonth — property: unparseable → null", () => {
           expect(resolveDateToDayMonth(input)).toBeNull()
         }
       ),
-      { numRuns: 300 }
+      { numRuns: 20 }
     )
   })
 

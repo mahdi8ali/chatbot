@@ -272,7 +272,8 @@ async function processToolCall(
     const r = await countNews({
       spec: { period: args.period, lastDays: args.last_days, from: args.from, to: args.to },
       categoryId: args.category_id,
-      typeId: args.type_id
+      typeId: args.type_id,
+      query: args.query
     })
     return {
       tool_call_id: toolCallId,
@@ -491,7 +492,7 @@ export async function resolveToolCalls(
       tool_choice: (toolsWereCalled ? "auto" : "required") as OpenAI.Chat.Completions.ChatCompletionToolChoiceOption,
       // @ts-ignore — parallel_tool_calls is supported at runtime but missing from older SDK types
       parallel_tool_calls: true,
-      temperature: 0.5,
+      temperature: 0,  // التغيير 3: حسم اختيار الأداة (حتمي) — خطوة الاختيار فقط، لا يمسّ الاستدعاء المتدفّق النهائي في route.ts
       max_tokens: 200  // اختيار الأداة فقط — لا يحتاج أكثر
     })
     console.log(`[Timing] OpenAI call ${iterations}: ${Date.now() - tCall}ms`)
