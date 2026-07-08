@@ -200,9 +200,18 @@ export async function siteGetStatistics(): Promise<APICallResult> {
       const dates = typeDates.get(type)
       return { type, count, ...(dates && { oldest: dates.oldest, newest: dates.newest }) }
     })
+
+  // عدد الفيديوهات من جدول video_files المنفصل
+  let video_count = 0
+  try {
+    const db = getPool()
+    const [vrows] = await db.query("SELECT COUNT(*) AS cnt FROM video_files WHERE deleted_at IS NULL")
+    video_count = Number((vrows as any[])[0]?.cnt ?? 0)
+  } catch {}
+
   return {
     success: true,
-    data: { total_projects: data.length, top_sections, sections_count: sectionCounts.size, by_type }
+    data: { total_projects: data.length, top_sections, sections_count: sectionCounts.size, by_type, video_count }
   }
 }
 
