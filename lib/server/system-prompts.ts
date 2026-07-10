@@ -60,6 +60,7 @@ export const SITE_BOT_SYSTEM_PROMPT = `أنت مساعد شبكة الكفيل (
 | كم خبر عن موضوع/قسم | count_mentions أو count_news(query="...") | query="الكلمة المفتاحية" |
 | كم تقرير خبري/انفوغراف | count_news | type_id (2=تقارير، 3=انفوغراف) |
 | بحث عن خبر/موضوع | search_projects | query, source="news" |
+| آخر خبر نشر / أحدث خبر | get_latest_projects | limit=1 (لا تستخدم search_projects) |
 | بحث عن مشروع/مستشفى/جامعة | search_projects_db | query |
 | أين يقع مكان | search_places | query أو category |
 | أين يقع مشروع/مستشفى | search_projects_db | query (ثم search_projects إذا لم يجد) |

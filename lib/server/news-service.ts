@@ -3,7 +3,7 @@
  * يغطي: search_news, get_latest, filter_categories, get_statistics
  */
 
-import { RowDataPacket } from "mysql2/promise"
+import mysql, { RowDataPacket } from "mysql2/promise"
 import {
   APICallResult, getPool,
   stripHtml, excerpt, normalizeArabicWord, consonantSkeleton, buildTitleExtras
@@ -154,11 +154,7 @@ export async function siteGetLatest(limit: number = 2, section?: string): Promis
       )
     )
   }
-  data.sort((a, b) => {
-    const tA = new Date(a.properties?.find((p: any) => p.name === "تاريخ النشر")?.value || 0).getTime()
-    const tB = new Date(b.properties?.find((p: any) => p.name === "تاريخ النشر")?.value || 0).getTime()
-    return tB - tA
-  })
+  data.sort((a, b) => (b.created_at_ts || 0) - (a.created_at_ts || 0))
   const projects = data.slice(0, Math.min(Math.max(limit || 5, 1), 20))
   return { success: true, data: { projects, total: projects.length, limit } }
 }
@@ -209,9 +205,24 @@ export async function siteGetStatistics(): Promise<APICallResult> {
     video_count = Number((vrows as any[])[0]?.cnt ?? 0)
   } catch {}
 
+  // عدد المشاريع من قاعدة المشاريع المنفصلة
+  let projects_count = 0
+  try {
+    const { getDatabaseConfig } = require("./site-api-config")
+    const cfg = getDatabaseConfig()
+    const projDb = await mysql.createConnection({
+      host: cfg.host, port: cfg.port, user: cfg.user, password: cfg.password,
+      database: process.env.PROJECTS_DB_NAME || "alkafeel_projects",
+      charset: "utf8mb4", socketPath: process.env.DB_SOCKET || undefined,
+    })
+    const [prows] = await projDb.query("SELECT COUNT(*) AS cnt FROM projects WHERE deleted_at IS NULL")
+    projects_count = Number((prows as any[])[0]?.cnt ?? 0)
+    await projDb.end()
+  } catch (e) { console.error("[stats] projects count error:", e) }
+
   return {
     success: true,
-    data: { total_projects: data.length, top_sections, sections_count: sectionCounts.size, by_type, video_count }
+    data: { total_news: data.length, projects_count, top_sections, sections_count: sectionCounts.size, by_type, video_count }
   }
 }
 
