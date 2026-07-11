@@ -173,10 +173,31 @@ async function processToolCall(
       section: args.section,
       limit: args.limit
     })
-    const content = (!dbResult.success || !dbResult.data?.results?.length)
-      ? JSON.stringify({ success: false, message: "لا توجد مشاريع مطابقة لبحثك في قاعدة بيانات المشاريع." })
-      : JSON.stringify({ success: true, total_found: dbResult.data.total_found, results: dbResult.data.results })
-    return { tool_call_id: toolCallId, role: "tool", content }
+
+    // إذا وجد نتائج → أرجعها مباشرة
+    if (dbResult.success && dbResult.data?.results?.length) {
+      return { tool_call_id: toolCallId, role: "tool", content: JSON.stringify({ success: true, total_found: dbResult.data.total_found, results: dbResult.data.results }) }
+    }
+
+    // إذا لم يجد → جرّب search_projects (قاعدة الأخبار) كخيار أخير
+    const query = args.query || ""
+    if (query) {
+      console.log(`[Fallback] search_projects_db empty, trying search_projects: "${query}"`)
+      const fallbackResult = await executeToolByName("search_projects", { query, limit: 5 })
+      if (fallbackResult.success && !isEmptyAPIResponse(fallbackResult.data)) {
+        return {
+          tool_call_id: toolCallId,
+          role: "tool",
+          content: JSON.stringify({
+            success: true,
+            data: fallbackResult.data,
+            fallback_note: "النتائج من قاعدة الأخبار."
+          })
+        }
+      }
+    }
+
+    return { tool_call_id: toolCallId, role: "tool", content: JSON.stringify({ success: false, message: "لا توجد نتائج مطابقة." }) }
   }
 
   if (toolName === "get_project_details") {
@@ -288,13 +309,12 @@ async function processToolCall(
     args
   )
 
-  // ✅ Phase 3: معالجة النتائج الفارغة مع اقتراحات ذكية
-  // لا نعترض إذا كان هناك حقل latest_available (فترة أحدث من آخر تحديث)
+  // ✅ Phase 3: معالجة النتائج الفارغة — جرّب search_projects كخيار أخير
   if (result.success && isEmptyAPIResponse(result.data) && !result.data?.latest_available) {
-    console.log(`[Function Call] Empty results detected, generating suggestions`)
-    
-    // استخرج query من المعاملات
     const query = args.query || args.searchTerm || args.keyword || ""
+
+    // إذا لم تكن الأداة هي search_projects بالفعل → جرّبها تلقائياً
+    if (query && toolName !== "search_projects") {
       console.log(`[Fallback] ${toolName} returned empty, trying search_projects with query: "${query}"`)
       const fallbackResult = await executeToolByName("search_projects", { query, limit: 5 })
       if (fallbackResult.success && !isEmptyAPIResponse(fallbackResult.data)) {
@@ -302,6 +322,7 @@ async function processToolCall(
         return {
           tool_call_id: toolCallId,
           role: "tool",
+          content: JSON.stringify({
             success: true,
             data: fallbackResult.data,
             fallback_note: `النتائج من قاعدة الأخبار (البحث الأصلي في ${toolName} لم يجد نتائج).`
