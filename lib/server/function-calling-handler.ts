@@ -295,15 +295,28 @@ async function processToolCall(
     
     // استخرج query من المعاملات
     const query = args.query || args.searchTerm || args.keyword || ""
+      console.log(`[Fallback] ${toolName} returned empty, trying search_projects with query: "${query}"`)
+      const fallbackResult = await executeToolByName("search_projects", { query, limit: 5 })
+      if (fallbackResult.success && !isEmptyAPIResponse(fallbackResult.data)) {
+        console.log(`[Fallback] search_projects found results!`)
+        return {
+          tool_call_id: toolCallId,
+          role: "tool",
+            success: true,
+            data: fallbackResult.data,
+            fallback_note: `النتائج من قاعدة الأخبار (البحث الأصلي في ${toolName} لم يجد نتائج).`
+          })
+        }
+      }
+    }
+
+    // إذا فشل كل شيء → ارجع اقتراحات
+    console.log(`[Function Call] Empty results detected, generating suggestions`)
     const category = args.category || undefined
-    
-    // توليد الاقتراحات الذكية
     const suggestionsResponse = generateNoResultsSuggestions(query, {
       searchedCategory: category,
       attemptedAction: toolName
     })
-    
-    // إرجاع النتيجة مع الاقتراحات
     return {
       tool_call_id: toolCallId,
       role: "tool",
@@ -315,6 +328,43 @@ async function processToolCall(
         context: suggestionsResponse.context,
         original_query: query
       })
+    }
+  }
+
+  // ✅ Phase 3b: النتائج موجودة لكنها ليست مطابقة تماماً — جرّب search_projects أيضاً
+  // يتفعّل عندما search_projects_db يجد نتائج لكن لا تحتوي الاسم المطلوب بالضبط
+  if (result.success && !isEmptyAPIResponse(result.data) && String(toolName) === "search_projects_db") {
+    const query = (args.query || "").trim()
+    const results = result.data?.results || []
+    if (query.length >= 4 && results.length > 0) {
+      // تحقق: هل أي نتيجة تحتوي على الكلمة المفتاحية الرئيسية في اسمها؟
+      // الكلمة المفتاحية = أطول كلمة في الاستعلام (الأكثر تحديداً)
+      const queryWords = query.split(/\s+/).filter((w: string) => w.length >= 3)
+      const keyWord = queryWords.sort((a: string, b: string) => b.length - a.length)[0] || ""
+      const nameMatch = results.some((r: any) => {
+        const name = (r.name || "").toLowerCase()
+        return keyWord && name.includes(keyWord.toLowerCase())
+      })
+      // إذا لم تجد مطابقة في الأسماء → جرّب search_projects
+      if (!nameMatch && keyWord) {
+        console.log(`[Fallback+] search_projects_db results don't match query "${query}", trying search_projects`)
+        const fallbackResult = await executeToolByName("search_projects", { query, limit: 5 })
+        if (fallbackResult.success && !isEmptyAPIResponse(fallbackResult.data)) {
+          const fbResults = fallbackResult.data?.results || []
+          if (fbResults.length > 0) {
+            console.log(`[Fallback+] search_projects found ${fbResults.length} results!`)
+            return {
+              tool_call_id: toolCallId,
+              role: "tool",
+              content: JSON.stringify({
+                success: true,
+                data: fallbackResult.data,
+                fallback_note: `النتائج من قاعدة الأخبار (البحث الأصلي في search_projects_db لم يجد "${query}" بالضبط).`
+              })
+            }
+          }
+        }
+      }
     }
   }
 
