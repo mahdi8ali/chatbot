@@ -1,6 +1,16 @@
 import { Metadata, Viewport } from "next"
+import { notFound } from "next/navigation"
 import { ReactNode } from "react"
 import "./globals.css"
+
+/**
+ * اللغات المدعومة. التطبيق عربي فقط حالياً (html lang="ar" dir="rtl" مثبّت أدناه).
+ *
+ * ⚠️ بدون هذا الحصر يبتلع المقطع الديناميكي [locale] **أي** مسار من المستوى الأول
+ * ويعيد صفحة المحادثة بحالة 200 — فمثلاً /widget.js (الودجت القديم المحذوف)
+ * كان يُعيد HTML بدل 404، أي أن أي تضمين قديم يحمّل صفحة على أنها سكربت.
+ */
+const SUPPORTED_LOCALES = new Set(["ar"])
 
 const APP_NAME = "مساعد مشاريع العتبة العباسية"
 const APP_DEFAULT_TITLE = "مساعد مشاريع العتبة العباسية"
@@ -38,6 +48,8 @@ export default async function RootLayout({
   children,
   params: { locale }
 }: RootLayoutProps) {
+  if (!SUPPORTED_LOCALES.has(locale)) notFound()
+
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <head>

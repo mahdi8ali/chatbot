@@ -25,6 +25,7 @@ import {
   buildLikeTerms,
   windowClause,
   matchClause,
+  buildQueryTokens,
   resolveGranularity,
   GRANULARITY_FORMATS,
   type PeriodSpec,
@@ -368,12 +369,18 @@ describe("Property 3 — parameter safety in windowClause/matchClause (Task 3.3)
     )
   })
 
-  it("matchClause: '?' count equals params length (2) for arbitrary query strings", () => {
+  // ملاحظة: كان هذا الاختبار يثبّت `params.length === 2` من أيام النمط الواحد
+  // (عبارة متلاصقة واحدة). بعد الانتقال إلى المطابقة كلمة‑كلمة (تقسيم إلى رموز
+  // + حدّ كلمة) صار كل رمز يُنتج معاملين (العنوان والمحتوى)، والعبارة الفارغة
+  // تُنتج شرطاً فارغاً بلا معاملات. الثابت الحاكم (Property 3) لم يتغيّر:
+  // عدد `?` == طول params — وهو ما يضمن أن لا قيمة مستخدم تُقحَم نصّياً في SQL.
+  it("matchClause: '?' count equals params length (2 per token) for arbitrary query strings", () => {
     fc.assert(
       fc.property(fc.string(), (query) => {
         const { sql, params } = matchClause(query)
         expect(countPlaceholders(sql)).toBe(params.length)
-        expect(params.length).toBe(2)
+        // معاملان لكل رمز (title + content) ⇒ العدد زوجي ومطابق لعدد الرموز.
+        expect(params.length).toBe(2 * buildQueryTokens(query).length)
       }),
       { numRuns: 20 }
     )

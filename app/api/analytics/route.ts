@@ -1,27 +1,10 @@
-import mysql from "mysql2/promise"
 
 // ⚠️ منع Next.js من تخزين (cache) نتائج الـ API — دائماً اقرأ من DB مباشرة
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
-import { getDatabaseConfig } from "@/lib/server/site-api-config"
 import { requireAdmin } from "@/lib/server/admin-auth"
+import { getLogsPool as getPool } from "@/lib/server/logs-db"
 
-let pool: mysql.Pool | null = null
-function getPool(): mysql.Pool {
-  if (pool) return pool
-  const cfg = getDatabaseConfig()
-  pool = mysql.createPool({
-    host: cfg.host,
-    port: cfg.port,
-    user: cfg.user,
-    password: cfg.password,
-    database: process.env.LOGS_DB_NAME || process.env.PROJECTS_DB_NAME || cfg.database || "alkafeel_projects",
-    connectionLimit: 3,
-    charset: "utf8mb4",
-    socketPath: process.env.DB_SOCKET || undefined,
-  })
-  return pool
-}
 
 export async function GET(req: Request) {
   const deny = requireAdmin(req)
@@ -107,10 +90,21 @@ export async function GET(req: Request) {
 
         // أكثر الأدوات استخداماً
         db.query(`
-          SELECT tool_called, COUNT(*) AS cnt
+          -- توحيد الأسماء القديمة مع الحالية قبل التجميع، وإلا ظهرت الأداة
+          -- الواحدة صفّين منفصلين بعد ترحيل التسمية (search_projects → search_content).
+          -- الخريطة نسخة من LEGACY_TOOL_ALIASES في site-tools-definitions.ts.
+          SELECT CASE tool_called
+                   WHEN 'search_projects'      THEN 'search_content'
+                   WHEN 'get_project_by_id'    THEN 'get_content_by_id'
+                   WHEN 'filter_projects'      THEN 'list_news_categories'
+                   WHEN 'get_latest_projects'  THEN 'get_latest_news'
+                   WHEN 'get_statistics'       THEN 'get_content_statistics'
+                   ELSE tool_called
+                 END AS tool_called,
+                 COUNT(*) AS cnt
           FROM chat_logs
           WHERE tool_called IS NOT NULL
-          GROUP BY tool_called
+          GROUP BY 1
           ORDER BY cnt DESC
           LIMIT 10
         `),
@@ -123,9 +117,11 @@ export async function GET(req: Request) {
           FROM chat_logs
           WHERE was_tool_used = 1 AND db_result_count = 0
             AND (tool_called IS NULL OR tool_called NOT IN (
-              'get_prayer_times', 'get_statistics', 'get_video_sections',
+              'get_prayer_times', 'get_content_statistics', 'get_video_sections',
               'get_project_details', 'get_project_image', 'get_project_images',
-              'get_news_images', 'get_project_by_id'
+              'get_news_images', 'get_content_by_id',
+              -- أسماء ما قبل الترحيل (سجلّات تاريخية)
+              'get_statistics', 'get_project_by_id'
             ))
           ORDER BY created_at DESC
           LIMIT 20
@@ -154,9 +150,10 @@ export async function GET(req: Request) {
             FROM chat_logs
             WHERE was_tool_used = 1 AND db_result_count = 0
               AND (tool_called IS NULL OR tool_called NOT IN (
-                'get_prayer_times','get_statistics','get_video_sections',
+                'get_prayer_times','get_content_statistics','get_video_sections',
                 'get_project_details','get_project_image','get_project_images',
-                'get_news_images','get_project_by_id'
+                'get_news_images','get_content_by_id',
+                'get_statistics','get_project_by_id'
               ))
             UNION ALL
             SELECT cl.user_question, 'negative_fb', cf.created_at

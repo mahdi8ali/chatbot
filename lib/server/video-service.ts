@@ -5,7 +5,7 @@
 import { RowDataPacket } from "mysql2/promise"
 import { APICallResult, getPool, excerpt, buildTitleExtras, parseJsonAr } from "./db"
 
-interface VideoFileRow extends RowDataPacket {
+export interface VideoFileRow extends RowDataPacket {
   id: number
   title: string        // JSON
   caption: string | null  // JSON
@@ -19,7 +19,7 @@ interface VideoFileRow extends RowDataPacket {
   section_request: string | null
 }
 
-function mapVideoToItem(row: VideoFileRow) {
+export function mapVideoToItem(row: VideoFileRow) {
   const titleAr = parseJsonAr(row.title)
   const captionAr = parseJsonAr(row.caption)
   const sectionTitleAr = parseJsonAr(row.section_title)

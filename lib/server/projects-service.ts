@@ -2,27 +2,11 @@
  * projects-service.ts — مشاريع العتبة العباسية من قاعدة بيانات alkafeel_projects
  */
 
-import mysql, { Pool, RowDataPacket } from "mysql2/promise"
-import { getDatabaseConfig } from "./site-api-config"
+import { RowDataPacket } from "mysql2/promise"
+import { getProjectsPool } from "./projects-db-service"
 import { APICallResult, stripHtml, excerpt, buildTitleExtras, normalizeArabicWord, consonantSkeleton } from "./db"
 
-// ── Pool منفصل لـ alkafeel_projects ─────────────────────────────────────────
-let projectsPool: Pool | null = null
-
-function getProjectsPool(): Pool {
-  if (projectsPool) return projectsPool
-  const config = getDatabaseConfig()
-  projectsPool = mysql.createPool({
-    host: config.host,
-    port: config.port,
-    user: config.user,
-    password: config.password,
-    database: process.env.PROJECTS_DB_NAME || "alkafeel_projects",
-    connectionLimit: config.connectionLimit,
-    charset: "utf8mb4"
-  })
-  return projectsPool
-}
+// البِركة مشتركة مع projects-db-service (نفس القاعدة) — لا داعي لبِركة ثانية.
 
 // ── Interfaces ────────────────────────────────────────────────────────────────
 interface ProjectRow extends RowDataPacket {

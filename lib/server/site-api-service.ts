@@ -20,6 +20,12 @@ import { searchContacts } from "./contacts-service"
 import { getAllProjects } from "./projects-service"
 import { searchPlaces } from "./places-service"
 import { getPrayerTimes } from "./prayer-service"
+import {
+  fetchNewsCandidates,
+  fetchVideoCandidates,
+  latestNewsDate,
+  CANDIDATE_LIMIT,
+} from "./search-engine"
 
 export type { APICallResult }
 
@@ -27,6 +33,17 @@ export type { APICallResult }
 export { searchContacts, getVideoSections, siteListCategories, siteGetLatest, siteGetStatistics }
 
 // ── البحث الموحّد عبر كل المصادر ─────────────────────────────────────────────
+/**
+ * محرّك البحث المستعمَل:
+ *   "db"     — ترشيح المرشّحين في SQL ثم إعادة ترتيبهم بـ scoreItem (الافتراضي)
+ *   "memory" — السلوك القديم: تحميل كل المصادر إلى الذاكرة وحساب النقاط عليها
+ *
+ * يبقى الوضع القديم متاحاً للتراجع الفوري وللمقارنة في `npm run eval`.
+ */
+function searchEngineMode(): "db" | "memory" {
+  return process.env.SEARCH_ENGINE === "memory" ? "memory" : "db"
+}
+
 export async function siteSearch(
   query?: string,
   section?: string,
@@ -48,14 +65,30 @@ export async function siteSearch(
   const wantVideo    = !effectiveSource || effectiveSource === "video"
   const wantProjects = !effectiveSource || effectiveSource === "project"
 
+  const useDb = searchEngineMode() === "db"
+  const EMPTY = Promise.resolve<APICallResult>({ success: true, data: [] })
+
+  // المصادر الكبيرة (أخبار 36k + فيديو 20k): تُرشَّح في SQL عند وضع "db".
+  // المصادر الصغيرة (سيرة 13 + تاريخ 27 + مشاريع 358 = 398): تبقى في الذاكرة —
+  // لا مبرّر لتعقيد استعلاماتها، وتحميلها زهيد.
+  const candidateOpts = { query, fromDate, toDate, type, sortBy }
+
   const [newsResult, abbasResult, historyResult, videoResult, projectsResult] = await Promise.all([
-    wantNews     ? getAllNews()      : Promise.resolve<APICallResult>({ success: true, data: [] }),
-    wantSira     ? getAllAbbas()     : Promise.resolve<APICallResult>({ success: true, data: [] }),
-    wantHistory  ? getAllHistory()   : Promise.resolve<APICallResult>({ success: true, data: [] }),
-    wantVideo    ? getAllVideos()    : Promise.resolve<APICallResult>({ success: true, data: [] }),
-    wantProjects ? getAllProjects()  : Promise.resolve<APICallResult>({ success: true, data: [] }),
+    wantNews
+      ? useDb
+        ? fetchNewsCandidates(candidateOpts).then(data => ({ success: true, data } as APICallResult))
+        : getAllNews()
+      : EMPTY,
+    wantSira     ? getAllAbbas()     : EMPTY,
+    wantHistory  ? getAllHistory()   : EMPTY,
+    wantVideo
+      ? useDb
+        ? fetchVideoCandidates(candidateOpts).then(data => ({ success: true, data } as APICallResult))
+        : getAllVideos()
+      : EMPTY,
+    wantProjects ? getAllProjects()  : EMPTY,
   ])
-  console.log(`[Timing] getAllSources: ${Date.now() - t0}ms`)
+  console.log(`[Timing] getAllSources (${useDb ? "db" : "memory"}): ${Date.now() - t0}ms`)
 
   const allData: any[] = [
     ...((newsResult.data     as any[]) || []),
@@ -114,23 +147,40 @@ export async function siteSearch(
       .sort((a, b) => (b.item.created_at_ts || 0) - (a.item.created_at_ts || 0))
   }
 
-  const totalMatches = matched.length
-  // النتائج المعروضة مقتصّة (لتوفير الـ tokens)، لكن total يعكس العدد الكامل للمطابقات
   const scored = matched
     .slice(0, Math.min(Math.max(limit || 2, 1), 20))
     .map(x => x.item)
+
+  // ── حقل total: عدد المرشّحين المطابقين، لا «عدد الأخبار عن الموضوع» ───────
+  //
+  // كان total يساوي عدد كل ما تجاوز عتبة scoreItem (≥3) على **كامل** القاعدة —
+  // أي «ورد فيه أي كلمة من الاستعلام». القياس على 149 سؤالاً حقيقياً: وسيط
+  // 44,155 من أصل 56,819، و147 سؤالاً تتجاوز الألف. وكان الموجّه يأمر النموذج
+  // بعرض هذا الرقم كـ«عدد الأخبار عن الموضوع» ⇒ أرقام بلا معنى باسم العتبة.
+  //
+  // التشخيص الصحيح: search_content أداة **استرجاع** لا أداة عدّ. العدّ له أدواته
+  // المخصّصة (count_news / count_mentions) بدلالة صارمة وحقل basis يوضّح التقريبية.
+  // لذلك: total هنا = عدد المرشّحين المطابقين ضمن النافذة، مع علم `truncated`
+  // حين تمتلئ النافذة (فقد يوجد المزيد). والموجّه حُدِّث ليوجّه أسئلة العدّ لـ count_news.
+  const totalMatches = matched.length
+  const truncated = useDb && allData.length >= CANDIDATE_LIMIT
 
   console.log(`[Timing] siteSearch loop (${dateFiltered.length} items): ${Date.now() - t1}ms → ${scored.length}/${totalMatches} matches`)
 
   // عند تحديد نطاق زمني وعدم وجود نتائج: أرجع آخر تاريخ متاح في القاعدة
   let latestAvailable: string | undefined
   if ((fromDate || toDate) && scored.length === 0) {
-    const allWithDates = allData
-      .filter(item => item.created_at_ts > 0)
-      .sort((a, b) => (b.created_at_ts || 0) - (a.created_at_ts || 0))
-    if (allWithDates.length > 0) {
-      const d = new Date(allWithDates[0].created_at_ts)
-      latestAvailable = d.toISOString().split("T")[0] // YYYY-MM-DD
+    if (useDb) {
+      // في وضع القاعدة لم تعد المصفوفة الكاملة موجودة ⇒ نستعلم التاريخ مباشرةً
+      latestAvailable = (await latestNewsDate()) || undefined
+    } else {
+      const allWithDates = allData
+        .filter(item => item.created_at_ts > 0)
+        .sort((a, b) => (b.created_at_ts || 0) - (a.created_at_ts || 0))
+      if (allWithDates.length > 0) {
+        const d = new Date(allWithDates[0].created_at_ts)
+        latestAvailable = d.toISOString().split("T")[0] // YYYY-MM-DD
+      }
     }
   }
 
@@ -140,6 +190,9 @@ export async function siteSearch(
       results: scored,
       total: totalMatches,
       returned: scored.length,
+      // علم صريح: نافذة المرشّحين امتلأت ⇒ total ليس عدداً شاملاً.
+      // يمنع النموذج من تقديمه كإحصاء («وجدتُ 400 خبراً»).
+      ...(truncated && { total_is_partial: true }),
       query: safeQuery || section || "",
       date_range: fromDate || toDate ? { from: fromDate || null, to: toDate || null } : undefined,
       ...(latestAvailable && { latest_available: latestAvailable }),
@@ -200,15 +253,15 @@ export async function executeToolByName(
   console.log(`[Tool Execution] ${toolName}`, args)
   try {
     switch (toolName) {
-      case "search_projects":
+      case "search_content":
         return await siteSearch(args.query, args.section, args.limit, args.source, args.from_date, args.to_date, args.type, args.sort_by)
-      case "get_project_by_id":
+      case "get_content_by_id":
         return await siteGetProject(args.id)
-      case "filter_projects":
+      case "list_news_categories":
         return await siteListCategories(args.include_counts)
-      case "get_latest_projects":
+      case "get_latest_news":
         return await siteGetLatest(undefined, args.section)
-      case "get_statistics":
+      case "get_content_statistics":
         return await siteGetStatistics()
       case "search_contacts":
         return await searchContacts(args.query)
@@ -240,5 +293,16 @@ export async function executeToolByName(
 }
 
 // ── تسخين الكاش عند بدء السيرفر ──────────────────────────────────────────────
-Promise.all([getAllNews(), getAllAbbas(), getAllHistory(), getAllVideos(), getAllProjects()])
-  .then(() => console.log("[Cache] Warm-up complete — news + sira + history + video + projects"))
+// في وضع "db" لا نُسخّن الأخبار (36k صفّاً) ولا الفيديو (20k) — فهما يُرشَّحان في
+// SQL عند الطلب. القياس قبل التغيير: 3.4–7.5 ثانية على كل إقلاع بارد لمجرّد
+// تحميلهما. تبقى المصادر الصغيرة (398 عنصراً) مُسخّنة لأنها زهيدة ويعتمد عليها
+// البحث الموحّد في الذاكرة.
+if (process.env.SEARCH_ENGINE === "memory") {
+  Promise.all([getAllNews(), getAllAbbas(), getAllHistory(), getAllVideos(), getAllProjects()])
+    .then(() => console.log("[Cache] Warm-up complete (memory engine) — all sources"))
+    .catch(err => console.error("[Cache] Warm-up failed:", err))
+} else {
+  Promise.all([getAllAbbas(), getAllHistory(), getAllProjects()])
+    .then(() => console.log("[Cache] Warm-up complete (db engine) — sira + history + projects only"))
+    .catch(err => console.error("[Cache] Warm-up failed:", err))
+}

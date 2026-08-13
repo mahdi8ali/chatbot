@@ -13,6 +13,7 @@ export const runtime = "nodejs"
 import {
   COOKIE_NAME,
   createSession,
+  isAdminAuthConfigured,
   lookupAdmin,
   verifyPassword,
 } from "@/lib/server/admin-auth"
@@ -23,6 +24,17 @@ const UNAUTHORIZED = () =>
 
 export async function POST(req: Request): Promise<Response> {
   try {
+    // إعداد ناقص (اسم مستخدم/تجزئة/سرّ جلسة) ⇒ اللوحة معطّلة صراحةً بدل فشل غامض.
+    if (!isAdminAuthConfigured()) {
+      console.error(
+        "[Admin Login] مصادقة الإدارة غير مهيّأة — تأكّد من ADMIN_USERNAME و ADMIN_PASSWORD_HASH و ADMIN_SESSION_SECRET (32 محرفاً فأكثر)."
+      )
+      return Response.json(
+        { error: "لوحة الإدارة غير مهيّأة على هذا الخادم." },
+        { status: 503 }
+      )
+    }
+
     let username: unknown
     let password: unknown
     try {
@@ -54,7 +66,8 @@ export async function POST(req: Request): Promise<Response> {
       { headers: { "Set-Cookie": cookie } }
     )
   } catch (err: any) {
+    // لا نُعيد err.message للعميل — قد يكشف تفاصيل إعداد داخلية.
     console.error("[Admin Login API]", err)
-    return Response.json({ error: err.message }, { status: 500 })
+    return Response.json({ error: "تعذّر تسجيل الدخول" }, { status: 500 })
   }
 }

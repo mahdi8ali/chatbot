@@ -59,6 +59,26 @@ jest.mock("../site-api-service", () => ({
   executeToolByName: jest.fn(),
 }))
 
+// المخزن المنسّق وقاعدة المعرفة صارا مدعومين بقاعدة بيانات (كانا منطقاً نقياً في
+// faq.ts وقت كتابة هذه الاختبارات). نُحاكيهما لإبقاء الاختبار بلا DB، ونتحكّم
+// بإصابة المخزن المنسّق لاختبار قصر المسار.
+const mockMatchCurated = jest.fn()
+jest.mock("../curated-service", () => ({
+  __esModule: true,
+  matchCurated: mockMatchCurated,
+}))
+
+const mockKbSearch = jest.fn()
+jest.mock("../kb-service", () => ({
+  __esModule: true,
+  kbSearch: mockKbSearch,
+  SHORT_CIRCUIT_THRESHOLD: 9.0,
+}))
+
+// المسار يحتاج مفتاحاً موجوداً ليبني عميل OpenAI (العميل نفسه مُحاكى أعلاه).
+// يُضبط قبل استيراد المسار كي يلتقطه أي منطق يقرأ البيئة عند التحميل.
+process.env.OPENAI_API_KEY = "test-key-not-used"
+
 // استيراد المسار بعد إعداد المحاكيات
 import { POST } from "@/app/api/chat/site/route"
 
@@ -99,6 +119,9 @@ function lastUpdateArgs() {
 
 beforeEach(() => {
   jest.clearAllMocks()
+  // افتراضياً: لا إصابة في المخزن المنسّق ولا في قاعدة المعرفة (يُعاد تجاوزه عند الحاجة)
+  mockMatchCurated.mockResolvedValue(null)
+  mockKbSearch.mockResolvedValue([])
   mockCreatePendingLog.mockResolvedValue("1")
   mockUpdateChatLog.mockResolvedValue(undefined)
   mockSaveChatLog.mockResolvedValue("1")
@@ -202,6 +225,19 @@ describe("POST /api/chat/site — تمرير داخل النطاق (Req 3.1, 3.2
 
 describe("POST /api/chat/site — قصر مسار FAQ (Req 3.3)", () => {
   it("يعيد إجابة FAQ الموثوقة دون استدعاء أداة/نموذج لـ: من هي أم العباس؟", async () => {
+    // المخزن المنسّق مبذور من FAQ_ENTRIES (انظر curated-service.seed) — نحاكي إصابته.
+    mockMatchCurated.mockResolvedValue({
+      id: 1,
+      category: "faq",
+      patterns: ["أم العباس"],
+      answer:
+        "أم أبي الفضل العباس (عليه السلام) هي السيدة **فاطمة بنت حزام العامرية** الملقبة بـ **أم البنين**.",
+      url: "https://alkafeel.net/abbas?lang=ar",
+      mode: "short_circuit",
+      priority: 0,
+      active: true,
+    })
+
     const res = await POST(makeRequest("من هي أم العباس؟"))
     const body = await res.text()
 

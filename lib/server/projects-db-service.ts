@@ -27,7 +27,7 @@ function imageUrl(img: string | null): string | null {
 // ─── Pool منفصل لقاعدة المشاريع ───────────────────────────────────────────
 let projectsPool: Pool | null = null
 
-function getProjectsPool(): Pool {
+export function getProjectsPool(): Pool {
   if (projectsPool) return projectsPool
   const cfg = getDatabaseConfig()
   projectsPool = mysql.createPool({
@@ -66,6 +66,13 @@ interface SectionRow extends RowDataPacket {
   id: number
   name: string
 }
+
+/**
+ * سقف الصفوف المسحوبة للبحث. الفلترة تجري في Node بعد السحب، فأي صفّ خارج هذا
+ * السقف يصبح غير قابل للبحث. الجدول بمئات الصفوف (≈358)، والسقف موضوع كصمّام
+ * أمان لا كحدّ نتائج — إن اقترب حجم الجدول منه يجب نقل الترشيح إلى SQL/FULLTEXT.
+ */
+const SEARCH_SCAN_LIMIT = 5000
 
 // ─── Cache ─────────────────────────────────────────────────────────────────
 let sectionsCache: SectionRow[] | null = null
@@ -194,6 +201,11 @@ export async function searchProjectsDB(params: {
     }
 
     // استعلام مع JOIN للأقسام والخصائص (كليات الجامعة، مواصفات المشروع...)
+    //
+    // ⚠️ كان هنا `LIMIT 200` قبل الفلترة في Node، فكان كل مشروع ترتيبه بعد الـ200
+    // (حسب id — أي الأحدث غالباً) غير قابل للعثور عليه إطلاقاً رغم وجوده في القاعدة.
+    // الآن: الحدّ مرفوع إلى ما يتجاوز حجم الجدول (مئات الصفوف لا ملايين)، والفلترة
+    // متعدّدة الخطوات (بما فيها Levenshtein) تبقى في Node كما هي بلا تغيير سلوكي.
     const sql = `
       SELECT DISTINCT
         p.id, p.name, p.description, p.address, p.section_id, p.news_url,
@@ -206,10 +218,15 @@ export async function searchProjectsDB(params: {
       WHERE p.deleted_at IS NULL
       ${sectionFilter}
       ORDER BY p.id
-      LIMIT 200
+      LIMIT ${SEARCH_SCAN_LIMIT}
     `
 
     const [rows] = await db.execute<ProjectRow[]>(sql, sectionParams)
+    if (rows.length >= SEARCH_SCAN_LIMIT) {
+      console.warn(
+        `[projects-db] بلغ المسح الحدّ (${SEARCH_SCAN_LIMIT}) — قد تُستبعد مشاريع من البحث. انقل الترشيح إلى SQL/FULLTEXT.`
+      )
+    }
 
     // فلترة في Node.js (تشمل الخصائص مثل كليات الجامعة)
     // الخطوة 1: كل الكلمات يجب أن تتطابق في الـ haystack
@@ -520,4 +537,15 @@ export async function getProjectImages(projectId: number): Promise<{
     console.error("[projects-db] getProjectImages error:", err)
     return { success: false, error: err.message }
   }
+}
+
+/**
+ * عدد المشاريع غير المحذوفة — يستعمل البِركة المشتركة بدل فتح اتصال جديد.
+ * (يُستدعى من news-service.siteGetStatistics الذي كان يفتح اتصالاً ويُسرّبه عند الخطأ.)
+ */
+export async function countProjects(): Promise<number> {
+  const [rows] = await getProjectsPool().execute<RowDataPacket[]>(
+    `SELECT COUNT(*) AS cnt FROM projects WHERE deleted_at IS NULL`
+  )
+  return Number((rows as any[])[0]?.cnt ?? 0)
 }

@@ -8,7 +8,12 @@
     "start": "next start",
     "lint": "next lint",
     "test": "jest",
-    "test:run": "jest --ci --runInBand"
+    "test:run": "jest --ci --runInBand",
+    "eval": "ts-node --project eval/tsconfig.json eval/run.ts",
+    "eval:generate": "ts-node --project eval/tsconfig.json eval/generate-cases.ts",
+    "eval:tools": "ts-node --project eval/tsconfig.json eval/tool-choice-ab.ts",
+    "eval:turns": "ts-node --project eval/tsconfig.json eval/multi-turn.ts",
+    "eval:selection": "ts-node --project eval/tsconfig.json eval/tool-selection.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.18.0",

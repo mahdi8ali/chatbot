@@ -15,8 +15,8 @@ import { ChatCompletionTool } from "openai/resources/chat/completions"
 export const TOOL_SEARCH_PROJECTS: ChatCompletionTool = {
   type: "function",
   function: {
-    name: "search_projects",
-    description: "بحث في قاعدة بيانات شبكة الكفيل: الأخبار، سيرة أبي الفضل العباس (ع)، التاريخ، ومكتبة الفيديو. ⚠️ ليست أداة عدّ: لأسئلة العدّ الكمّي («كم» / «عدد» / «كم مرة» / «كم خبراً عن X» / «كم خبراً لقسم X») استخدم أداة count_news (المسار الموحّد للعدّ) — لا تستعمل هذه الأداة ولا get_statistics للعدّ. ⚠️ إذا ذكر المستخدم شهر أو سنة محددة → استخدم from_date و to_date. ⚠️ إذا سأل عن «أكثر خبر زيارة» أو «الأكثر مشاهدة» → استخدم sort_by: \"views\".",
+    name: "search_content",
+    description: "بحث في قاعدة بيانات شبكة الكفيل: الأخبار، سيرة أبي الفضل العباس (ع)، التاريخ، ومكتبة الفيديو. ⚠️ ليست أداة عدّ: لأسئلة العدّ الكمّي («كم» / «عدد» / «كم مرة» / «كم خبراً عن X» / «كم خبراً لقسم X») استخدم أداة count_news (المسار الموحّد للعدّ) — لا تستعمل هذه الأداة ولا get_content_statistics للعدّ. ⚠️ إذا ذكر المستخدم شهر أو سنة محددة → استخدم from_date و to_date. ⚠️ إذا سأل عن «أكثر خبر زيارة» أو «الأكثر مشاهدة» → استخدم sort_by: \"views\".",
     parameters: {
       type: "object",
       properties: {
@@ -71,7 +71,7 @@ export const TOOL_SEARCH_PROJECTS: ChatCompletionTool = {
 export const TOOL_GET_PROJECT_BY_ID: ChatCompletionTool = {
   type: "function",
   function: {
-    name: "get_project_by_id",
+    name: "get_content_by_id",
     description: "تفاصيل كاملة عن خبر محدد بالـ ID.",
     parameters: {
       type: "object",
@@ -94,7 +94,7 @@ export const TOOL_GET_PROJECT_BY_ID: ChatCompletionTool = {
 export const TOOL_FILTER_PROJECTS: ChatCompletionTool = {
   type: "function",
   function: {
-    name: "filter_projects",
+    name: "list_news_categories",
     description: "قائمة التصنيفات المتاحة مع عدد الأخبار.",
     parameters: {
       type: "object",
@@ -117,7 +117,7 @@ export const TOOL_FILTER_PROJECTS: ChatCompletionTool = {
 export const TOOL_GET_LATEST_PROJECTS: ChatCompletionTool = {
   type: "function",
   function: {
-    name: "get_latest_projects",
+    name: "get_latest_news",
     description: "أحدث الأخبار المنشورة في شبكة الكفيل.",
     parameters: {
       type: "object",
@@ -146,7 +146,7 @@ export const TOOL_GET_LATEST_PROJECTS: ChatCompletionTool = {
 export const TOOL_GET_STATISTICS: ChatCompletionTool = {
   type: "function",
   function: {
-    name: "get_statistics",
+    name: "get_content_statistics",
     description: "إحصائيات عامة: عدد الأخبار، التصنيفات الأكثر محتوى.",
     parameters: {
       type: "object",
@@ -184,7 +184,7 @@ export const TOOL_SEARCH_PROJECTS_DB: ChatCompletionTool = {
   type: "function",
   function: {
     name: "search_projects_db",
-    description: "بحث في قاعدة بيانات مشاريع العتبة العباسية المنفصلة (358 مشروع). استخدمها عندما يسأل المستخدم عن مشروع محدد أو قطاع معين مثل: طبي، تعليمي، زراعي، إنشائي، ثقافي... ترجع قائمة مشاريع مع ملخص ورقم ID لكل مشروع.",
+    description: "بحث في قاعدة بيانات مشاريع العتبة العباسية المنفصلة. استخدمها عندما يسأل المستخدم عن مشروع محدد أو قطاع معين مثل: طبي، تعليمي، زراعي، إنشائي، ثقافي... ترجع قائمة مشاريع مع ملخص ورقم ID لكل مشروع.",
     parameters: {
       type: "object",
       properties: {
@@ -257,7 +257,7 @@ export const TOOL_SEARCH_PLACES: ChatCompletionTool = {
   type: "function",
   function: {
     name: "search_places",
-    description: "⚠️ أداة إلزامية لأي سؤال عن مكان في كربلاء — لا تجب أبداً عن مواقع أو فنادق أو أماكن من معرفتك الخاصة. استخدم هذه الأداة فوراً عندما يسأل الزائر عن: موقع مزار/مرقد، فنادق قريبة أو أفضل فنادق، حسينيات، مواكب خدمية، مرافق صحية، نقاط خدمية، أو أي مكان في كربلاء. قاعدة البيانات تحتوي 4,084 مكاناً (892 فندقاً) مع إحداثيات GPS ورابط خرائط جوجل وعنوان تفصيلي لكل مكان. أمثلة: 'أين مرقد الإمام الحسين؟'، 'فنادق قريبة من الصحن'، 'أقرب حسينية'، 'مستشفيات في كربلاء'، 'أقرب فندق إلى الحرمين'.",
+    description: "⚠️ أداة إلزامية لأي سؤال عن مكان في كربلاء — لا تجب أبداً عن مواقع أو فنادق أو أماكن من معرفتك الخاصة. استخدم هذه الأداة فوراً عندما يسأل الزائر عن: موقع مزار/مرقد، فنادق قريبة أو أفضل فنادق، حسينيات، مواكب خدمية، مرافق صحية، نقاط خدمية، أو أي مكان في كربلاء. قاعدة البيانات تضمّ آلاف الأماكن (منها فنادق كثيرة) مع إحداثيات GPS ورابط خرائط جوجل وعنوان تفصيلي لكل مكان. أمثلة: 'أين مرقد الإمام الحسين؟'، 'فنادق قريبة من الصحن'، 'أقرب حسينية'، 'مستشفيات في كربلاء'، 'أقرب فندق إلى الحرمين'.",
     parameters: {
       type: "object",
       properties: {
@@ -297,7 +297,7 @@ export const TOOL_SEARCH_VIDEOS: ChatCompletionTool = {
   type: "function",
   function: {
     name: "search_videos",
-    description: "بحث مباشر في مكتبة فيديو شبكة الكفيل (20,769 فيديو) بالعنوان أو الوصف. استخدم هذه الأداة تحديداً عندما يطلب المستخدم فيديو بعنوان أو موضوع محدد: 'أريد فيديو عن محرم'، 'فيديو طوعة العصر'، 'أرني فيديوهات الأربعين'، 'فيديو خطبة'... إلخ. النتيجة تحتوي رابط mp4 مباشر للتشغيل.",
+    description: "بحث مباشر في مكتبة فيديو شبكة الكفيل بالعنوان أو الوصف. استخدم هذه الأداة تحديداً عندما يطلب المستخدم فيديو بعنوان أو موضوع محدد: 'أريد فيديو عن محرم'، 'فيديو طوعة العصر'، 'أرني فيديوهات الأربعين'، 'فيديو خطبة'... إلخ. النتيجة تحتوي رابط mp4 مباشر للتشغيل.",
     parameters: {
       type: "object",
       properties: {
@@ -328,7 +328,7 @@ export const TOOL_GET_VIDEO_SECTIONS: ChatCompletionTool = {
   type: "function",
   function: {
     name: "get_video_sections",
-    description: "قائمة جميع أقسام مكتبة الفيديو في شبكة الكفيل (43 قسماً). استخدم هذه الأداة عندما يسأل المستخدم عن: أقسام الفيديو، ما هي تصنيفات الفيديو، ماذا يوجد في مكتبة الفيديو، أو يريد تصفح محتوى الفيديو.",
+    description: "قائمة جميع أقسام مكتبة الفيديو في شبكة الكفيل. استخدم هذه الأداة عندما يسأل المستخدم عن: أقسام الفيديو، ما هي تصنيفات الفيديو، ماذا يوجد في مكتبة الفيديو، أو يريد تصفح محتوى الفيديو.",
     parameters: {
       type: "object",
       properties: {},
@@ -383,6 +383,69 @@ export const TOOL_GET_NEWS_IMAGES: ChatCompletionTool = {
  * قائمة جميع الأدوات المتاحة
  */
 /**
+ * أداة البحث في الإصدارات والمطبوعات (كتب، مجلات، دراسات)
+ */
+export const TOOL_SEARCH_PUBLICATIONS: ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "search_publications",
+    description: "بحث في إصدارات ومطبوعات العتبة العباسية المقدسة: كتب، مجلات، دراسات دينية وثقافية (سلاسل مثل مناهل الطف، رياض الزهراء، عطاء الشباب، منشورات المكتبة). استخدمها عندما يسأل المستخدم عن كتاب أو مجلة أو إصدار أو مطبوعة بعنوان أو موضوع محدد: 'هل يوجد كتاب عن سيرة العباس؟'، 'أريد مجلة رياض الزهراء'، 'ما هي إصداراتكم في العقيدة؟'. ⚠️ ليست search_content — الإصدارات في قاعدة منفصلة تماماً عن الأخبار. كل نتيجة تحمل image_url (غلاف الإصدار)، pdf_url (تصفّح مباشر)، وdownload_url (تحميل الأرشيف) جاهزة — قد يكون أيٌّ منها null إن غاب الملف المقابل.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "كلمات البحث بالعربية — عنوان الإصدار أو موضوعه (اختياري إن حُدّد category_id). ⚠️ إن ذكر المستخدم رقم عدد/إصدار معيّناً (مثل \"العدد 50\"، \"العدد رقم ٥٠\")، ضع الرقم كرقم داخل query حرفياً (مثال: \"مجلة الرياحين 50\") — لا تحذفه ولا تكتفِ باسم السلسلة وحده، فرقم العدد هو معيار المطابقة الأساسي."
+        },
+        category_id: {
+          type: "number",
+          description: "معرّف سلسلة/تصنيف الإصدارات للتصفية (اختياري) — يُجلب عبر get_publication_categories"
+        },
+        limit: {
+          type: "number",
+          description: "عدد النتائج (افتراضي: 8، أقصى: 20)",
+          minimum: 1,
+          maximum: 20
+        }
+      },
+      required: []
+    }
+  }
+}
+
+/**
+ * أداة قائمة سلاسل/تصنيفات الإصدارات
+ */
+export const TOOL_GET_PUBLICATION_CATEGORIES: ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "get_publication_categories",
+    description: "قائمة كل سلاسل وتصنيفات الإصدارات المتاحة (مثل: مناهل الطف، رياض الزهراء، منشورات المكتبة) مع عدد الإصدارات في كل سلسلة ووصفها. استخدمها عندما يسأل المستخدم: 'ما هي سلاسل إصداراتكم؟'، 'ما تصنيفات المطبوعات المتاحة؟'، 'ماذا لديكم من مجلات؟'.",
+    parameters: {
+      type: "object",
+      properties: {},
+      required: []
+    }
+  }
+}
+
+/**
+ * أداة روابط حسابات التواصل الاجتماعي
+ */
+export const TOOL_GET_SOCIAL_MEDIA_LINKS: ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "get_social_media_links",
+    description: "روابط حسابات العتبة العباسية المقدسة الرسمية على مواقع التواصل الاجتماعي (فيسبوك، تويتر/إكس، إنستغرام...) مع عدد المتابعين. استخدمها فوراً عندما يسأل المستخدم: 'ما حساباتكم على انستغرام؟'، 'رابط صفحتكم على فيسبوك'، 'هل لديكم تويتر؟'، 'كم متابع لديكم؟'. ⚠️ لا تخترع رابط حساب من معرفتك الخاصة — استخدم هذه الأداة دائماً.",
+    parameters: {
+      type: "object",
+      properties: {},
+      required: []
+    }
+  }
+}
+
+/**
  * أداة أوقات الصلاة
  */
 export const TOOL_GET_PRAYER_TIMES: ChatCompletionTool = {
@@ -410,7 +473,7 @@ export const TOOL_COUNT_MENTIONS: ChatCompletionTool = {
   type: "function",
   function: {
     name: "count_mentions",
-    description: "لعدّ ذكر كلمة/اسم/موضوع في أخبار شبكة الكفيل ضمن فترة زمنية مع الحاجة إلى عيّنة روابط توضيحية (sample). مثل: «كم مرة ذُكر علي البدري خلال آخر شهر؟»، «كم خبراً نُشر عن زيارة عرفة؟». تُعطي نفس عدد count_news(query) بالضبط (دلالة مطابقة موحّدة)؛ فإن لم تكن بحاجة لعيّنة روابط فاستخدم count_news. لا تستعمل search_projects للعدّ. يكفي الاسم دون ألقاب («سيد»/«سماحة»)، والعدّ تقريبي بمطابقة الكلمات المطبّعة (بحدود الكلمات) في العنوان والمحتوى.",
+    description: "لعدّ ذكر كلمة/اسم/موضوع في أخبار شبكة الكفيل ضمن فترة زمنية مع الحاجة إلى عيّنة روابط توضيحية (sample). مثل: «كم مرة ذُكر علي البدري خلال آخر شهر؟»، «كم خبراً نُشر عن زيارة عرفة؟». تُعطي نفس عدد count_news(query) بالضبط (دلالة مطابقة موحّدة)؛ فإن لم تكن بحاجة لعيّنة روابط فاستخدم count_news. لا تستعمل search_content للعدّ. يكفي الاسم دون ألقاب («سيد»/«سماحة»)، والعدّ تقريبي بمطابقة الكلمات المطبّعة (بحدود الكلمات) في العنوان والمحتوى.",
     parameters: {
       type: "object",
       properties: {
@@ -587,18 +650,21 @@ export const ALL_SITE_TOOLS: ChatCompletionTool[] = [
   TOOL_COUNT_MENTIONS,
   TOOL_MENTIONS_TIMELINE,
   TOOL_TOP_TOPICS,
-  TOOL_COUNT_NEWS
+  TOOL_COUNT_NEWS,
+  TOOL_SEARCH_PUBLICATIONS,
+  TOOL_GET_PUBLICATION_CATEGORIES,
+  TOOL_GET_SOCIAL_MEDIA_LINKS
 ]
 
 /**
  * Whitelist: أسماء الأدوات المسموحة فقط
  */
 export const ALLOWED_TOOL_NAMES = [
-  "search_projects",
-  "get_project_by_id",
-  "filter_projects",
-  "get_latest_projects",
-  "get_statistics",
+  "search_content",
+  "get_content_by_id",
+  "list_news_categories",
+  "get_latest_news",
+  "get_content_statistics",
   "search_contacts",
   "search_projects_db",
   "get_project_details",
@@ -612,16 +678,49 @@ export const ALLOWED_TOOL_NAMES = [
   "count_mentions",
   "mentions_timeline",
   "top_topics",
-  "count_news"
+  "count_news",
+  "search_publications",
+  "get_publication_categories",
+  "get_social_media_links"
 ] as const
 
 export type AllowedToolName = (typeof ALLOWED_TOOL_NAMES)[number]
 
 /**
- * التحقق من أن اسم الأداة مسموح
+ * أسماء قديمة → أسماء حالية (توافق خلفي).
+ *
+ * سبب الترحيل: الأسماء القديمة كانت **تكذب** على النموذج وعلى القارئ —
+ * `search_projects` كانت تبحث في الأخبار لا المشاريع، و`filter_projects` تُرجع
+ * التصنيفات، و`get_project_by_id` يجلب خبراً. أسماء مضلّلة ⇒ اختيار خاطئ للأداة،
+ * وقد عُوّض ذلك سابقاً بتحذيرات مطوّلة في الموجّه.
+ *
+ * تُقبل الأسماء القديمة هنا لأن النموذج قد يُصدرها من نمط محفوظ، فتُترجم بصمت
+ * بدل أن تُرفض. ملاحظة للوحة التحليلات: عمود `chat_logs.tool_called` يحمل
+ * الأسماء القديمة في السجلّات السابقة — استعمل هذه الخريطة عند التجميع.
+ *
+ * ⚠️ لم يُعَد استعمال الاسم `search_projects` لأداة أخرى عمداً، كي لا تختلط
+ * دلالة السجلّات التاريخية (كانت تعني بحث الأخبار) بدلالة جديدة.
+ */
+export const LEGACY_TOOL_ALIASES: Readonly<Record<string, AllowedToolName>> = Object.freeze({
+  search_projects: "search_content",
+  get_project_by_id: "get_content_by_id",
+  filter_projects: "list_news_categories",
+  get_latest_projects: "get_latest_news",
+  get_statistics: "get_content_statistics",
+})
+
+/**
+ * يحوّل اسماً قديماً إلى الاسم الحالي، أو يُعيده كما هو إن لم يكن قديماً.
+ */
+export function canonicalToolName(toolName: string): string {
+  return LEGACY_TOOL_ALIASES[toolName] ?? toolName
+}
+
+/**
+ * التحقق من أن اسم الأداة مسموح (يقبل الأسماء القديمة عبر الخريطة أعلاه).
  */
 export function isAllowedTool(toolName: string): toolName is AllowedToolName {
-  return ALLOWED_TOOL_NAMES.includes(toolName as AllowedToolName)
+  return ALLOWED_TOOL_NAMES.includes(canonicalToolName(toolName) as AllowedToolName)
 }
 
 /**

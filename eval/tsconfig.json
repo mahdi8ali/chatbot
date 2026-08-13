@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "target": "ES2020",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "isolatedModules": false,
+    "jsx": "react-jsx"
+  },
+  "include": ["**/*.ts", "../lib/**/*.ts"]
+}

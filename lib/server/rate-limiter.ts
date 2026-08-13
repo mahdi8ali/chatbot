@@ -71,8 +71,13 @@ function cleanupOldEntries(): void {
   }
 }
 
-// تشغيل التنظيف التلقائي
-setInterval(cleanupOldEntries, CLEANUP_INTERVAL)
+// تشغيل التنظيف التلقائي.
+// unref(): لا يُبقي حلقة أحداث Node حيّة من أجل هذا المؤقّت وحده — بدونه كان
+// `jest` ينهي كل الاختبارات ثم يتعلّق للأبد (وكذلك أي سكربت يستورد هذه الوحدة).
+const cleanupTimer = setInterval(cleanupOldEntries, CLEANUP_INTERVAL)
+if (typeof (cleanupTimer as any)?.unref === "function") {
+  ;(cleanupTimer as any).unref()
+}
 
 /**
  * استخراج IP من Request

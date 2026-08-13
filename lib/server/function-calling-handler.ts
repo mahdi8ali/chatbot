@@ -12,12 +12,15 @@ import OpenAI from "openai"
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions"
 import {
   isAllowedTool,
+  canonicalToolName,
   type AllowedToolName
 } from "./site-tools-definitions"
 import { executeToolByName, type APICallResult } from "./site-api-service"
 import { searchProjectsDB, getProjectDetails, getProjectImage, getProjectImages } from "./projects-db-service"
 import { getNewsImages } from "./news-service"
 import { countMentions, mentionsTimeline, topTopics, countNews } from "./analytics-service"
+import { searchPublications, getPublicationCategories } from "./publications-service"
+import { getSocialMediaLinks } from "./social-media-service"
 import { getFallbackResponse } from "./system-prompts"
 import {
   isEmptyAPIResponse,
@@ -119,8 +122,154 @@ export interface FunctionCallResult {
 }
 
 /**
+ * سجلّ الأدوات ذات المعالجة المباشرة (Direct tool registry).
+ *
+ * بديل سلسلة `if (toolName === "...")` التي بلغت عشرة فروع داخل دالة واحدة:
+ * إضافة أداة صارت **مدخلة في خريطة** لا تعديلاً في جسم دالة طويلة، وكل معالج
+ * مستقلّ وقابل للقراءة وحده.
+ *
+ * العقد: يأخذ المعالج المعاملات ويُعيد **نصّ JSON** جاهزاً لرسالة role:"tool".
+ * هذه الأدوات لا تمرّ على cleanResultForGPT — إمّا لأنها إحصائية (لا مشاريع
+ * تُنظَّف) أو لأن شكلها النهائي مقصود كما هو.
+ */
+type DirectToolHandler = (args: Record<string, any>) => Promise<string>
+
+const DIRECT_TOOL_HANDLERS: Record<string, DirectToolHandler> = {
+  // ── قاعدة المشاريع المنفصلة ──────────────────────────────────────────────
+  async search_projects_db(args) {
+    const dbResult = await searchProjectsDB({
+      query: args.query || "",
+      section: args.section,
+      limit: args.limit,
+    })
+
+    // إذا وجد نتائج → أرجعها مباشرة
+    if (dbResult.success && dbResult.data?.results?.length) {
+      return JSON.stringify({
+        success: true,
+        total_found: dbResult.data.total_found,
+        results: dbResult.data.results,
+      })
+    }
+
+    // إذا لم يجد → جرّب البحث في المحتوى (قاعدة الأخبار) كخيار أخير
+    const query = args.query || ""
+    if (query) {
+      console.log(`[Fallback] search_projects_db empty, trying search_content: "${query}"`)
+      const fallbackResult = await executeToolByName("search_content", { query, limit: 5 })
+      if (fallbackResult.success && !isEmptyAPIResponse(fallbackResult.data)) {
+        return JSON.stringify({
+          success: true,
+          data: fallbackResult.data,
+          fallback_note: "النتائج من قاعدة الأخبار.",
+        })
+      }
+    }
+
+    return JSON.stringify({ success: false, message: "لا توجد نتائج مطابقة." })
+  },
+
+  async get_project_details(args) {
+    const r = await getProjectDetails(Number(args.project_id))
+    return !r.success || !r.data
+      ? JSON.stringify({ success: false, message: r.error || "المشروع غير موجود." })
+      : JSON.stringify({ success: true, project: r.data })
+  },
+
+  async get_project_image(args) {
+    const r = await getProjectImage(Number(args.project_id))
+    return !r.success || !r.data
+      ? JSON.stringify({ success: false, message: r.error || "لا توجد صورة لهذا المشروع." })
+      : JSON.stringify({
+          success: true,
+          name: r.data.name,
+          image_url: r.data.image_url,
+          project_url: r.data.project_url,
+          news_url: r.data.news_url || null,
+          attached_images_count: r.data.attached_images_count,
+        })
+  },
+
+  async get_project_images(args) {
+    const r = await getProjectImages(Number(args.project_id))
+    return JSON.stringify(
+      r.success ? r.data : { success: false, message: r.error || "لا توجد صور مرفقة لهذا المشروع." }
+    )
+  },
+
+  async get_news_images(args) {
+    const r = await getNewsImages(Number(args.news_id))
+    return JSON.stringify(
+      r.success ? r.data : { success: false, message: r.error || "لا توجد صور مرفقة." }
+    )
+  },
+
+  // ── أدوات تحليل المحتوى (نتائج إحصائية) ─────────────────────────────────
+  async count_mentions(args) {
+    const r = await countMentions({
+      query: args.query || "",
+      spec: { period: args.period, lastDays: args.last_days, from: args.from, to: args.to },
+      sample: true,
+    })
+    return JSON.stringify(r.success ? r.data : { success: false, message: r.error })
+  },
+
+  async mentions_timeline(args) {
+    const r = await mentionsTimeline({
+      query: args.query || "",
+      granularity: args.granularity,
+      spec: { period: args.period, lastDays: args.last_days, from: args.from, to: args.to },
+    })
+    return JSON.stringify(r.success ? r.data : { success: false, message: r.error })
+  },
+
+  async top_topics(args) {
+    const r = await topTopics({
+      spec: { period: args.period, lastDays: args.last_days },
+      section: args.section,
+      limit: args.limit,
+    })
+    return JSON.stringify(r.success ? r.data : { success: false, message: r.error })
+  },
+
+  async count_news(args) {
+    const r = await countNews({
+      spec: { period: args.period, lastDays: args.last_days, from: args.from, to: args.to },
+      categoryId: args.category_id,
+      typeId: args.type_id,
+      query: args.query,
+    })
+    return JSON.stringify(r.success ? r.data : { success: false, message: r.error })
+  },
+
+  // ── الإصدارات والمطبوعات ─────────────────────────────────────────────────
+  // شكل النتيجة (title/category/date/size) مختلف تماماً عن شكل "المشروع" الذي
+  // تتوقّعه cleanResultForGPT (id/name/description/sections)، فتمرّ عبر السجلّ
+  // المباشر بدل executeToolByName — نفس منطق count_mentions ونظائرها أعلاه.
+  async search_publications(args) {
+    const r = await searchPublications({
+      query: args.query,
+      categoryId: args.category_id,
+      limit: args.limit,
+    })
+    return JSON.stringify(r.success ? r.data : { success: false, message: r.error })
+  },
+
+  async get_publication_categories() {
+    const r = await getPublicationCategories()
+    return JSON.stringify(r.success ? r.data : { success: false, message: r.error })
+  },
+
+  // ── روابط التواصل الاجتماعي ──────────────────────────────────────────────
+  async get_social_media_links() {
+    const r = await getSocialMediaLinks()
+    return JSON.stringify(r.success ? r.data : { success: false, message: r.error })
+  },
+}
+
+/**
  * معالجة tool call واحد
- * 
+ *
  * @param toolCall - معلومات الأداة المراد استدعاءها
  */
 async function processToolCall(
@@ -130,20 +279,24 @@ async function processToolCall(
   role: "tool"
   content: string
 }> {
-  const toolName = toolCall.function.name
+  const rawName = toolCall.function.name
+  // توحيد الاسم: يقبل الأسماء القديمة (search_projects…) ويترجمها للحالية.
+  const toolName = canonicalToolName(rawName)
   const toolCallId = toolCall.id
 
-  console.log(`[Function Call] Tool: ${toolName}, ID: ${toolCallId}`)
+  console.log(
+    `[Function Call] Tool: ${toolName}${rawName !== toolName ? ` (اسم قديم: ${rawName})` : ""}, ID: ${toolCallId}`
+  )
 
   // التحقق من Whitelist
   if (!isAllowedTool(toolName)) {
-    console.error(`[Function Call] Rejected: ${toolName} not in whitelist`)
+    console.error(`[Function Call] Rejected: ${rawName} not in whitelist`)
     return {
       tool_call_id: toolCallId,
       role: "tool",
       content: JSON.stringify({
         success: false,
-        error: `الأداة "${toolName}" غير مسموحة`,
+        error: `الأداة "${rawName}" غير مسموحة`,
         message: "هذه الأداة غير متاحة حالياً في النظام."
       })
     }
@@ -166,141 +319,10 @@ async function processToolCall(
     }
   }
 
-  // ─── الأدوات المرتبطة بقاعدة المشاريع المنفصلة (early return) ────────
-  if (toolName === "search_projects_db") {
-    const dbResult = await searchProjectsDB({
-      query: args.query || "",
-      section: args.section,
-      limit: args.limit
-    })
-
-    // إذا وجد نتائج → أرجعها مباشرة
-    if (dbResult.success && dbResult.data?.results?.length) {
-      return { tool_call_id: toolCallId, role: "tool", content: JSON.stringify({ success: true, total_found: dbResult.data.total_found, results: dbResult.data.results }) }
-    }
-
-    // إذا لم يجد → جرّب search_projects (قاعدة الأخبار) كخيار أخير
-    const query = args.query || ""
-    if (query) {
-      console.log(`[Fallback] search_projects_db empty, trying search_projects: "${query}"`)
-      const fallbackResult = await executeToolByName("search_projects", { query, limit: 5 })
-      if (fallbackResult.success && !isEmptyAPIResponse(fallbackResult.data)) {
-        return {
-          tool_call_id: toolCallId,
-          role: "tool",
-          content: JSON.stringify({
-            success: true,
-            data: fallbackResult.data,
-            fallback_note: "النتائج من قاعدة الأخبار."
-          })
-        }
-      }
-    }
-
-    return { tool_call_id: toolCallId, role: "tool", content: JSON.stringify({ success: false, message: "لا توجد نتائج مطابقة." }) }
-  }
-
-  if (toolName === "get_project_details") {
-    const detailResult = await getProjectDetails(Number(args.project_id))
-    const content = (!detailResult.success || !detailResult.data)
-      ? JSON.stringify({ success: false, message: detailResult.error || "المشروع غير موجود." })
-      : JSON.stringify({ success: true, project: detailResult.data })
-    return { tool_call_id: toolCallId, role: "tool", content }
-  }
-
-  if (toolName === "get_news_images") {
-    const newsImgResult = await getNewsImages(Number(args.news_id))
-    return {
-      tool_call_id: toolCallId,
-      role: "tool",
-      content: JSON.stringify(
-        newsImgResult.success
-          ? newsImgResult.data
-          : { success: false, message: newsImgResult.error || "لا توجد صور مرفقة." }
-      ),
-    }
-  }
-
-  if (toolName === "get_project_image") {
-    const imgResult = await getProjectImage(Number(args.project_id))
-    const content = (!imgResult.success || !imgResult.data)
-      ? JSON.stringify({ success: false, message: imgResult.error || "لا توجد صورة لهذا المشروع." })
-      : JSON.stringify({
-          success: true,
-          name: imgResult.data.name,
-          image_url: imgResult.data.image_url,
-          project_url: imgResult.data.project_url,
-          news_url: imgResult.data.news_url || null,
-          attached_images_count: imgResult.data.attached_images_count,
-        })
-    return { tool_call_id: toolCallId, role: "tool", content }
-  }
-
-  if (toolName === "get_project_images") {
-    const imgsResult = await getProjectImages(Number(args.project_id))
-    return {
-      tool_call_id: toolCallId,
-      role: "tool",
-      content: JSON.stringify(
-        imgsResult.success
-          ? imgsResult.data
-          : { success: false, message: imgsResult.error || "لا توجد صور مرفقة لهذا المشروع." }
-      ),
-    }
-  }
-
-  // ─── أدوات تحليل المحتوى (early return — نتائج إحصائية لا تمرّ على cleanProject) ────────
-  if (toolName === "count_mentions") {
-    const r = await countMentions({
-      query: args.query || "",
-      spec: { period: args.period, lastDays: args.last_days, from: args.from, to: args.to },
-      sample: true
-    })
-    return {
-      tool_call_id: toolCallId,
-      role: "tool",
-      content: JSON.stringify(r.success ? r.data : { success: false, message: r.error })
-    }
-  }
-
-  if (toolName === "mentions_timeline") {
-    const r = await mentionsTimeline({
-      query: args.query || "",
-      granularity: args.granularity,
-      spec: { period: args.period, lastDays: args.last_days, from: args.from, to: args.to }
-    })
-    return {
-      tool_call_id: toolCallId,
-      role: "tool",
-      content: JSON.stringify(r.success ? r.data : { success: false, message: r.error })
-    }
-  }
-
-  if (toolName === "top_topics") {
-    const r = await topTopics({
-      spec: { period: args.period, lastDays: args.last_days },
-      section: args.section,
-      limit: args.limit
-    })
-    return {
-      tool_call_id: toolCallId,
-      role: "tool",
-      content: JSON.stringify(r.success ? r.data : { success: false, message: r.error })
-    }
-  }
-
-  if (toolName === "count_news") {
-    const r = await countNews({
-      spec: { period: args.period, lastDays: args.last_days, from: args.from, to: args.to },
-      categoryId: args.category_id,
-      typeId: args.type_id,
-      query: args.query
-    })
-    return {
-      tool_call_id: toolCallId,
-      role: "tool",
-      content: JSON.stringify(r.success ? r.data : { success: false, message: r.error })
-    }
+  // سجلّ الأدوات ذات المعالجة المباشرة (بديل سلسلة if الطويلة — انظر تعريفه أدناه)
+  const direct = DIRECT_TOOL_HANDLERS[toolName]
+  if (direct) {
+    return { tool_call_id: toolCallId, role: "tool", content: await direct(args) }
   }
 
   // تنفيذ الأداة عبر site-api-service
@@ -309,16 +331,16 @@ async function processToolCall(
     args
   )
 
-  // ✅ Phase 3: معالجة النتائج الفارغة — جرّب search_projects كخيار أخير
+  // ✅ Phase 3: معالجة النتائج الفارغة — جرّب search_content كخيار أخير
   if (result.success && isEmptyAPIResponse(result.data) && !result.data?.latest_available) {
     const query = args.query || args.searchTerm || args.keyword || ""
 
-    // إذا لم تكن الأداة هي search_projects بالفعل → جرّبها تلقائياً
-    if (query && toolName !== "search_projects") {
-      console.log(`[Fallback] ${toolName} returned empty, trying search_projects with query: "${query}"`)
-      const fallbackResult = await executeToolByName("search_projects", { query, limit: 5 })
+    // إذا لم تكن الأداة هي search_content بالفعل → جرّبها تلقائياً
+    if (query && toolName !== "search_content") {
+      console.log(`[Fallback] ${toolName} returned empty, trying search_content with query: "${query}"`)
+      const fallbackResult = await executeToolByName("search_content", { query, limit: 5 })
       if (fallbackResult.success && !isEmptyAPIResponse(fallbackResult.data)) {
-        console.log(`[Fallback] search_projects found results!`)
+        console.log(`[Fallback] search_content found results!`)
         return {
           tool_call_id: toolCallId,
           role: "tool",
@@ -352,7 +374,7 @@ async function processToolCall(
     }
   }
 
-  // ✅ Phase 3b: النتائج موجودة لكنها ليست مطابقة تماماً — جرّب search_projects أيضاً
+  // ✅ Phase 3b: النتائج موجودة لكنها ليست مطابقة تماماً — جرّب search_content أيضاً
   // يتفعّل عندما search_projects_db يجد نتائج لكن لا تحتوي الاسم المطلوب بالضبط
   if (result.success && !isEmptyAPIResponse(result.data) && String(toolName) === "search_projects_db") {
     const query = (args.query || "").trim()
@@ -366,14 +388,14 @@ async function processToolCall(
         const name = (r.name || "").toLowerCase()
         return keyWord && name.includes(keyWord.toLowerCase())
       })
-      // إذا لم تجد مطابقة في الأسماء → جرّب search_projects
+      // إذا لم تجد مطابقة في الأسماء → جرّب search_content
       if (!nameMatch && keyWord) {
-        console.log(`[Fallback+] search_projects_db results don't match query "${query}", trying search_projects`)
-        const fallbackResult = await executeToolByName("search_projects", { query, limit: 5 })
+        console.log(`[Fallback+] search_projects_db results don't match query "${query}", trying search_content`)
+        const fallbackResult = await executeToolByName("search_content", { query, limit: 5 })
         if (fallbackResult.success && !isEmptyAPIResponse(fallbackResult.data)) {
           const fbResults = fallbackResult.data?.results || []
           if (fbResults.length > 0) {
-            console.log(`[Fallback+] search_projects found ${fbResults.length} results!`)
+            console.log(`[Fallback+] search_content found ${fbResults.length} results!`)
             return {
               tool_call_id: toolCallId,
               role: "tool",
@@ -542,10 +564,14 @@ export async function resolveToolCalls(
   needsFinalCall: boolean
   iterations: number
   directAnswer?: string
+  /** استهلاك رموز نداءات اختيار الأداة — كانت غير مقيسة إطلاقاً رغم أنها
+   *  تحمل تعريفات الأدوات (~3000 رمز) وتتكرّر حتى 3 مرات لكل سؤال. */
+  usage: { promptTokens: number; completionTokens: number; cachedTokens: number }
 }> {
   let currentMessages = [...messages]
   let iterations = 0
   let toolsWereCalled = false
+  const usage = { promptTokens: 0, completionTokens: 0, cachedTokens: 0 }
 
   while (iterations < maxIterations) {
     iterations++
@@ -568,6 +594,14 @@ export async function resolveToolCalls(
     })
     console.log(`[Timing] OpenAI call ${iterations}: ${Date.now() - tCall}ms`)
 
+    // تجميع الاستهلاك (يشمل تعريفات الأدوات) — أساس معرفة الكلفة الحقيقية
+    const u: any = (response as any).usage
+    if (u) {
+      usage.promptTokens += u.prompt_tokens ?? 0
+      usage.completionTokens += u.completion_tokens ?? 0
+      usage.cachedTokens += u.prompt_tokens_details?.cached_tokens ?? 0
+    }
+
     const assistantMessage = response.choices[0].message
     currentMessages.push(assistantMessage)
 
@@ -581,7 +615,8 @@ export async function resolveToolCalls(
         return {
           resolvedMessages: currentMessages,
           needsFinalCall: true,
-          iterations
+          iterations,
+          usage
         }
       }
       // سؤال بسيط بدون أدوات → نرجعه كـ directAnswer
@@ -589,7 +624,8 @@ export async function resolveToolCalls(
         resolvedMessages: currentMessages,
         needsFinalCall: false,
         iterations,
-        directAnswer: assistantMessage.content || ""
+        directAnswer: assistantMessage.content || "",
+        usage
       }
     }
 
@@ -604,7 +640,8 @@ export async function resolveToolCalls(
   return {
     resolvedMessages: currentMessages,
     needsFinalCall: true,
-    iterations
+    iterations,
+    usage
   }
 }
 

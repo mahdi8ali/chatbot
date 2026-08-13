@@ -6,7 +6,7 @@ const config = {
   // Pick up *.test.ts (and .tsx) files, e.g. under lib/server/__tests__/
   testMatch: ['**/__tests__/**/*.test.ts?(x)', '**/?(*.)+(spec|test).ts?(x)'],
   // Do not scan build/output/vendor directories
-  testPathIgnorePatterns: ['/node_modules/', '/.next/', '/tests/'],
+  testPathIgnorePatterns: ['/node_modules/', '/.next/'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   transform: {
     '^.+\\.(ts|tsx)$': [

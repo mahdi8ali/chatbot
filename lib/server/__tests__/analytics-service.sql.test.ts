@@ -71,8 +71,10 @@ describe("Task 5.5 — سلامة المعاملات وأمان SQL (Property 3)
       expect(countPlaceholders(sql)).toBe(params.length)
       // شرط الأساس (Req 7.6).
       expect(sql).toContain("active = 1 AND deleted_at IS NULL")
-      // نمط LIKE (قيمة المستخدم بعد التطبيع العربي الخفيف: ة→ه) موجود في params لا في SQL.
-      expect(params).toContain("%غزه%")
+      // نمط LIKE موجود في params لا في SQL. القيمة تمرّ بالتطبيع العربي الخفيف
+      // (ة→ه) ثم تُسبق بمسافة تمثّل حدّ الكلمة اليساري (المطابقة كلمة‑كلمة)،
+      // فيصير النمط "% غزه%" لا "%غزه%" — يمنع تصادمات مثل «عرفة» داخل «معرفة».
+      expect(params).toContain("% غزه%")
       expect(sql).not.toContain("غز")
       // قيم النافذة الصريحة موجودة في params لا في SQL.
       expect(params).toContain("2026-01-01 00:00:00")

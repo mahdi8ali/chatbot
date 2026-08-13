@@ -9,8 +9,7 @@
  * وبلا مساس ببيانات المحتوى (ka_db / alkafeel_projects).
  */
 
-import mysql from "mysql2/promise"
-import { getDatabaseConfig } from "./site-api-config"
+import { getLogsPool as getPool } from "./logs-db"
 import { normalizeArabic, FAQ_ENTRIES } from "./faq"
 
 // ===== النوع المُصدَّر =====
@@ -26,28 +25,6 @@ export interface CuratedEntry {
 }
 
 // ===== المجمّع المعزول (نمط chat-logger.ts) =====
-let pool: mysql.Pool | null = null
-
-function getPool(): mysql.Pool {
-  if (pool) return pool
-  const cfg = getDatabaseConfig()
-  pool = mysql.createPool({
-    host: cfg.host,
-    port: cfg.port,
-    user: cfg.user,
-    password: cfg.password,
-    // نفس قاعدة السجلّات المعزولة المستخدمة في chat-logger.ts
-    database:
-      process.env.LOGS_DB_NAME ||
-      process.env.PROJECTS_DB_NAME ||
-      cfg.database ||
-      "local_chatbot_logs",
-    connectionLimit: 3,
-    charset: "utf8mb4",
-    socketPath: process.env.DB_SOCKET || undefined,
-  })
-  return pool
-}
 
 // ===== إنشاء الجدول (idempotent) =====
 let tableReady = false
@@ -173,8 +150,19 @@ async function loadEntries(): Promise<CuratedEntry[]> {
 const MIN_LENGTH = 5 // نفس حارس الطول في searchFAQ الأصلية
 
 /**
- * يطابق رسالة المستخدم مع مدخلة منسّقة (مرتّبة تنازلياً بالأولوية).
- * يُعيد أوّل مدخلة مطابِقة (الأعلى أولوية) أو null.
+ * يطابق رسالة المستخدم مع مدخلة منسّقة.
+ *
+ * ⚠️ كان السلوك «أوّل تطابق يفوز» بترتيب (الأولوية، المعرّف). وهذا يجعل **نمطاً
+ * واحداً فضفاضاً يخطف كل الأسئلة**: لو حوت مدخلة «أم العباس» نمطاً عاماً مثل
+ * «العباس»، لأصابت أسئلة «متى استشهد العباس» و«أين مرقد العباس» و«صفات العباس»
+ * جميعها بجواب عن أمّه — لأن النوبة لا تصل إلى المدخلة الصحيحة أصلاً.
+ *
+ * السلوك الآن: نجمع **كل** المطابقات ونختار **الأكثر تحديداً** — أي أطول نمط
+ * مطابِق (بعد التطبيع)، لأن طول النمط دلالة مباشرة على خصوصيته. وعند التساوي
+ * تُرجّح الأولوية الأعلى ثم المعرّف الأقدم، فيبقى القرار حتمياً.
+ *
+ * وهذا وحده لا يكفي — الحدّ الأدنى للتحديد في curated-validation.ts هو خطّ
+ * الدفاع الأول الذي يمنع وجود النمط الفضفاض ابتداءً.
  */
 export async function matchCurated(
   userMessage: string
@@ -182,20 +170,28 @@ export async function matchCurated(
   const q = normalizeArabic(userMessage)
   if (!q || q.length < MIN_LENGTH) return null // تجاهل الرسائل القصيرة جداً
 
-  const entries = await loadEntries() // مرتّبة تنازلياً حسب priority
+  const entries = await loadEntries() // مرتّبة تنازلياً حسب priority ثم id
 
-  for (const entry of entries) {
-    // أعلى أولوية أولاً ⇒ حتمية
+  let best: { entry: CuratedEntry; len: number; rank: number } | null = null
+
+  entries.forEach((entry, rank) => {
     for (const pattern of entry.patterns) {
       const p = normalizeArabic(pattern)
+      if (!p) continue
       // تطابق حدود الكلمة (word-boundary) — نفس منطق faq.ts
       const regex = new RegExp(
         `(^|\\s)${p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|\\s)`
       )
-      if (regex.test(q)) return entry
+      if (!regex.test(q)) continue
+
+      // الأكثر تحديداً يفوز؛ وعند التساوي: الترتيب الأصلي (أولوية ثم معرّف)
+      if (!best || p.length > best.len || (p.length === best.len && rank < best.rank)) {
+        best = { entry, len: p.length, rank }
+      }
     }
-  }
-  return null
+  })
+
+  return best ? (best as { entry: CuratedEntry }).entry : null
 }
 
 /**

@@ -10,8 +10,7 @@
  * وبلا مساس ببيانات المحتوى (ka_db / alkafeel_projects). كل استعلامات SQL مُعامَلة (?).
  */
 
-import mysql from "mysql2/promise"
-import { getDatabaseConfig } from "./site-api-config"
+import { getLogsPool as getPool } from "./logs-db"
 import { normalizeArabic } from "./faq"
 import { fuzzyNorm, levenshtein } from "./db"
 
@@ -56,28 +55,6 @@ export interface KbSearchOpts {
 }
 
 // ===== المجمّع المعزول (نمط curated-service.ts) =====
-let pool: mysql.Pool | null = null
-
-function getPool(): mysql.Pool {
-  if (pool) return pool
-  const cfg = getDatabaseConfig()
-  pool = mysql.createPool({
-    host: cfg.host,
-    port: cfg.port,
-    user: cfg.user,
-    password: cfg.password,
-    // نفس قاعدة السجلّات المعزولة المستخدمة في curated-service.ts / chat-logger.ts
-    database:
-      process.env.LOGS_DB_NAME ||
-      process.env.PROJECTS_DB_NAME ||
-      cfg.database ||
-      "local_chatbot_logs",
-    connectionLimit: 3,
-    charset: "utf8mb4",
-    socketPath: process.env.DB_SOCKET || undefined,
-  })
-  return pool
-}
 
 // ===== إنشاء الجدول (idempotent) =====
 let tableReady = false

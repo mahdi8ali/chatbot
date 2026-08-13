@@ -77,9 +77,34 @@ export default function MessageList({
     }
   }, [lbImages.length])
 
+  // بديل onerror المضمّن الذي كان في renderMarkdown (أُزيل لتفادي HTML قابل للحقن).
+  // يُطبَّق على الصور المعلّمة بـ data-gm-fallback عند فشل التحميل — بالتقاط في
+  // مرحلة الـ capture لأن حدث error لا يتصاعد (does not bubble).
+  const handleMsgError = useCallback((e: React.SyntheticEvent) => {
+    const t = e.target as HTMLElement
+    if (t.tagName !== "IMG" || !t.hasAttribute("data-gm-fallback")) return
+    const img = t as HTMLImageElement
+    img.removeAttribute("data-gm-fallback") // لا نكرّر المعالجة لو فشل البديل أيضاً
+    img.style.cssText = "width:80px;height:80px;object-fit:contain;border-radius:6px;opacity:0.35;"
+    img.src = "/broken-img.svg"
+  }, [])
+
   // event delegation — يلتقط الضغط على أي صورة داخل الرسائل
   const handleMsgClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement
+
+    // بديل onclick المضمّن لمشغّل الفيديو (أُزيل من renderMarkdown لنفس السبب).
+    const videoWrap = target.closest<HTMLElement>("[data-gm-video]")
+    if (videoWrap) {
+      const v = videoWrap.querySelector("video")
+      if (v) {
+        videoWrap.classList.add("gm-playing")
+        v.controls = true
+        void v.play()
+      }
+      return
+    }
+
     if (target.tagName !== "IMG") return
     const img = target as HTMLImageElement
 
@@ -115,7 +140,7 @@ export default function MessageList({
   return (
     <>
       <div className={`gm-messages-layer${messages.length > 0 ? " in" : ""}`}>
-        <div className="gm-messages-inner" onClick={handleMsgClick}>
+        <div className="gm-messages-inner" onClick={handleMsgClick} onErrorCapture={handleMsgError}>
           {messages.map((msg, i) => {
             const isLastAndStreaming = isStreaming && i === messages.length - 1 && msg.role === "assistant"
             return (

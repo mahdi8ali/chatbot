@@ -1,0 +1,747 @@
+[
+  {
+    "id": "user-1",
+    "query": "https://alkafeel.net/new/infograph_inner/39493?lang=ar\n\nتستطيع قراءة الروابط ؟\n\nهذا مثال",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-2",
+    "query": "أعرض لي المشاريع الطبية للعتبة العباسية",
+    "historicalTool": "search_projects_db"
+  },
+  {
+    "id": "user-3",
+    "query": "أعطني الأخبار المتعلقة بقسم الشؤون الفكرية المنشورة في شبكة الكفيل العالمية",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-4",
+    "query": "أعطني عدد الأخبار المتعلقة بقسم الشؤون الفكرية المنشورة في شبكة الكفيل العالمية",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-5",
+    "query": "ابحث عن مستشفى الزكي",
+    "historicalTool": "search_projects_db"
+  },
+  {
+    "id": "user-6",
+    "query": "ابحث لي عن مشروع توسعة الحرم العباسي",
+    "historicalTool": "search_projects_db"
+  },
+  {
+    "id": "user-7",
+    "query": "اخوية بي سرطان ومريض حايرين شنسوي",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-8",
+    "query": "اخوية مريض بي سرطان وحايرين شنسوي",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-9",
+    "query": "اخوية يريد يدرس بالنجف قانون وين يروح ؟",
+    "historicalTool": "search_projects_db"
+  },
+  {
+    "id": "user-10",
+    "query": "اريد اجيب حبيبتي نعد زواج بدون علم ابوها عادي ؟",
+    "historicalTool": null
+  },
+  {
+    "id": "user-11",
+    "query": "اريد اجيب صاحبتي اعقد عليها عقد متعة مؤقت بالعتبة",
+    "historicalTool": null
+  },
+  {
+    "id": "user-12",
+    "query": "اريد اجيب صاحبتي اعقد عليها متعة بالعتبة بدون ميدري ابوها عادي ؟",
+    "historicalTool": null
+  },
+  {
+    "id": "user-13",
+    "query": "اريد اجيب صاحبتي اعقد عليها متعة زواج مؤقت بالعتبة بدون ميدري ابوها عادي ؟",
+    "historicalTool": null
+  },
+  {
+    "id": "user-14",
+    "query": "اريد اجيب صاحبتي اعقد متعة بالعتبة يصير ؟",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-15",
+    "query": "اريد ادرس قانون بالنجف شسوي ؟",
+    "historicalTool": "search_projects_db"
+  },
+  {
+    "id": "user-16",
+    "query": "اريد اصلي تراويح بالعتبة العباسية المقدسة اكو ؟",
+    "historicalTool": null
+  },
+  {
+    "id": "user-17",
+    "query": "اريد رقم المعاون الاداري للمضيف",
+    "historicalTool": "search_contacts"
+  },
+  {
+    "id": "user-18",
+    "query": "اريد رقم مستشفى الكفيل",
+    "historicalTool": "search_contacts"
+  },
+  {
+    "id": "user-19",
+    "query": "اريد روابط الاخبار التي ذكر فيها",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-20",
+    "query": "اريد صورة جامعة العميد",
+    "historicalTool": "search_projects_db"
+  },
+  {
+    "id": "user-21",
+    "query": "اريد عنوان جامعة العمنيد",
+    "historicalTool": "search_contacts"
+  },
+  {
+    "id": "user-22",
+    "query": "اريد فيديو عن تبديل راية الامام الحسين",
+    "historicalTool": "search_videos"
+  },
+  {
+    "id": "user-23",
+    "query": "اريد فيديو عن نجني بالحسين",
+    "historicalTool": "search_videos"
+  },
+  {
+    "id": "user-24",
+    "query": "اريد فيديو مال طوعة",
+    "historicalTool": "search_videos"
+  },
+  {
+    "id": "user-25",
+    "query": "اريد معلومات عن صحن أم البنين",
+    "historicalTool": "search_projects_db"
+  },
+  {
+    "id": "user-26",
+    "query": "اريد معلومات عن مشروع صحن أم البنين",
+    "historicalTool": "search_projects_db"
+  },
+  {
+    "id": "user-27",
+    "query": "استعادة هوية العراق.. إحياء الزراعة واستثمار التكنولوجيا\n\nهذا الخبر لأي قسم ينتمي ؟",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-28",
+    "query": "اعطيني عناوينهن",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-29",
+    "query": "التوجيه الديني في العتبة العباسية المقدسة مهمة إنسانية برسائل أخلاقية\nهذا الخبر لأي قسم ينتمي ؟",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-30",
+    "query": "انتفاضات المحرّم وصفر بالعراق في قرن : عام 1935م وبدايات المواجهة مع الدولة المركزية - ( 2)\n\nلأي قسم ينتمي ؟",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-31",
+    "query": "انتفاضات المحرّم وصفر بالعراق في قرن : عام 1935م وبدايات المواجهة مع الدولة المركزية - ( 2)\n\nماذا عن هذا",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-32",
+    "query": "اين البحث",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-33",
+    "query": "اين تقع جامعة العميد",
+    "historicalTool": "search_contacts"
+  },
+  {
+    "id": "user-34",
+    "query": "اين تقع جامعة العنيد",
+    "historicalTool": "search_projects_db"
+  },
+  {
+    "id": "user-35",
+    "query": "اين تقع مستشفى الزكي",
+    "historicalTool": "search_places"
+  },
+  {
+    "id": "user-36",
+    "query": "اين ذكر ان الصلاة التراويح بدعة ؟",
+    "historicalTool": null
+  },
+  {
+    "id": "user-37",
+    "query": "اين يقع صحن ام البنين",
+    "historicalTool": "search_places"
+  },
+  {
+    "id": "user-38",
+    "query": "تعرض اخبار صورية تأكدلي من الاسم",
+    "historicalTool": "get_video_sections"
+  },
+  {
+    "id": "user-39",
+    "query": "تكلم لي عن صلاة التراويح وهل يتم ادائها بالعتبة",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-40",
+    "query": "تكلم لي عن صلاة التراويح وهل يتم صلاتها بالعتبة",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-41",
+    "query": "تكلملي قليلا عن عثمان ابن عفان",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-42",
+    "query": "جامعة العميد",
+    "historicalTool": "search_projects_db"
+  },
+  {
+    "id": "user-43",
+    "query": "صدك انتو العتبة حرامية تبوكون فلوس العباس عليه السلام",
+    "historicalTool": null
+  },
+  {
+    "id": "user-44",
+    "query": "في اي تاريخ",
+    "historicalTool": "get_latest_projects"
+  },
+  {
+    "id": "user-45",
+    "query": "في اي عام نحن الان",
+    "historicalTool": null
+  },
+  {
+    "id": "user-46",
+    "query": "في اي محتوى ذكر ذلك",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-47",
+    "query": "في اي يوم بالضبط ستحدث هذا العام",
+    "historicalTool": "get_prayer_times"
+  },
+  {
+    "id": "user-48",
+    "query": "في اي يوم يصادف زيارة الاربعين بالميلادي",
+    "historicalTool": null
+  },
+  {
+    "id": "user-49",
+    "query": "في قسم الاخبار كم قسم فرعي يوجد",
+    "historicalTool": "filter_projects"
+  },
+  {
+    "id": "user-50",
+    "query": "قسم تقارير خبرية كم تقرير فيه",
+    "historicalTool": "count_news"
+  },
+  {
+    "id": "user-51",
+    "query": "كم انفوغراف",
+    "historicalTool": "count_news"
+  },
+  {
+    "id": "user-52",
+    "query": "كم انفوغراف لدينا",
+    "historicalTool": "count_news"
+  },
+  {
+    "id": "user-53",
+    "query": "كم انفوغراف مصور لدينا",
+    "historicalTool": "count_mentions"
+  },
+  {
+    "id": "user-54",
+    "query": "كم باب رئيسي للصحن الشريف",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-55",
+    "query": "كم تقرير خبري في قسم التقارير الخبرية",
+    "historicalTool": "count_news"
+  },
+  {
+    "id": "user-56",
+    "query": "كم تقرير خبري لدينا",
+    "historicalTool": "count_news"
+  },
+  {
+    "id": "user-57",
+    "query": "كم خبر عن زيارة عرفه",
+    "historicalTool": "count_mentions"
+  },
+  {
+    "id": "user-58",
+    "query": "كم خبر في شهر ايار 2026",
+    "historicalTool": "count_news"
+  },
+  {
+    "id": "user-59",
+    "query": "كم خبر في قاعدة البيانات",
+    "historicalTool": "count_news"
+  },
+  {
+    "id": "user-60",
+    "query": "كم خبر في قسم الانفوغراف",
+    "historicalTool": "count_news"
+  },
+  {
+    "id": "user-61",
+    "query": "كم خبر لدينا في قسم تقارير خبرية",
+    "historicalTool": "count_news"
+  },
+  {
+    "id": "user-62",
+    "query": "كم خبر لقسم المجمع العلمي للقرآن الكريم في شبكة الكفيل العالمية",
+    "historicalTool": "count_news"
+  },
+  {
+    "id": "user-63",
+    "query": "كم خبر نشر عن سماحة السيد احمد الصافي في شهر ابريل ٢٠٢٦",
+    "historicalTool": "count_mentions"
+  },
+  {
+    "id": "user-64",
+    "query": "كم خبر نشر في الشبكة عن زيارة عرفة",
+    "historicalTool": "count_mentions"
+  },
+  {
+    "id": "user-65",
+    "query": "كم عدد الاخبار التي تخص قسم الصيانة",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-66",
+    "query": "كم عدد الانفوغراف لدينا",
+    "historicalTool": "count_news"
+  },
+  {
+    "id": "user-67",
+    "query": "كم فيديو في مكتبة الفيديو",
+    "historicalTool": "get_statistics"
+  },
+  {
+    "id": "user-68",
+    "query": "كم قسم لدينا في الاخبار",
+    "historicalTool": "get_statistics"
+  },
+  {
+    "id": "user-69",
+    "query": "كم كيلو غرام فضة في شباك القاسم",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-70",
+    "query": "كم مرة ذكر سماحة السيد احمد الصافي اخر شهر",
+    "historicalTool": "count_mentions"
+  },
+  {
+    "id": "user-71",
+    "query": "كم مرة ذكر سماحة السيد احمد الصافي في عنوان خبر في شهر ابريل ٢٠٢٦",
+    "historicalTool": "count_mentions"
+  },
+  {
+    "id": "user-72",
+    "query": "كم مرة ذكر سيد احمد الصافي في شهر اذار",
+    "historicalTool": "count_mentions"
+  },
+  {
+    "id": "user-73",
+    "query": "كم مرة ذكر سيد احمد الصافي في شهر شباط",
+    "historicalTool": "count_mentions"
+  },
+  {
+    "id": "user-74",
+    "query": "كم مرة ذكر عباس الدده اخر شهر",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-75",
+    "query": "كم مرة ذكر علي البدري اخر ٣ اشهر",
+    "historicalTool": "count_mentions"
+  },
+  {
+    "id": "user-76",
+    "query": "كم مشروع لدينا",
+    "historicalTool": "get_statistics"
+  },
+  {
+    "id": "user-77",
+    "query": "كم مصنع تابع الى العتبة العباسية المقدسة",
+    "historicalTool": "search_projects_db"
+  },
+  {
+    "id": "user-78",
+    "query": "كم هو عدد الاخبار المنشورة في شهر شباط من سنة 2026؟",
+    "historicalTool": "count_news"
+  },
+  {
+    "id": "user-79",
+    "query": "كيف اتزوج مسيار",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-80",
+    "query": "كيف اصلي التراويح وهل هي تقام في العتبة",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-81",
+    "query": "كيف اصلي تراويح ؟",
+    "historicalTool": null
+  },
+  {
+    "id": "user-82",
+    "query": "كيف اصلي صلاة التراويح",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-83",
+    "query": "كيف اصلي صلاة التراويح وهل تقام في العتبة ؟",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-84",
+    "query": "لدينا قسم بالاخبار اسمه انفوغراف او انفوغرافك صحيح ؟",
+    "historicalTool": "filter_projects"
+  },
+  {
+    "id": "user-85",
+    "query": "ليس اقدم واحد اريد احدث انفوغراف نشر",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-86",
+    "query": "ما هو احدث خبر نشرتموه؟\"",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-87",
+    "query": "ما هو اكثر خبر تم زيارته في شهر شباط من سنة 2026",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-88",
+    "query": "ما هو اكثر خبر تم زيارته في شهر شباط من سنة 2026؟",
+    "historicalTool": "get_statistics"
+  },
+  {
+    "id": "user-89",
+    "query": "ما هو اكثر خبر تم قراءته خلال شهر محرم الحرام لسنة 1448 هجري؟",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-90",
+    "query": "ما هو عدد الاخبار التي تم نشرها من 1/1/2026 ولغاية 4/2/2026؟",
+    "historicalTool": "count_news"
+  },
+  {
+    "id": "user-91",
+    "query": "ما هو مجموع المساحات الزراعية المزروعة في مشاريع العتبة العباسية المقدسة؟",
+    "historicalTool": "search_projects_db"
+  },
+  {
+    "id": "user-92",
+    "query": "ما هي أوقات الصلاة اليوم في كربلاء؟",
+    "historicalTool": "get_prayer_times"
+  },
+  {
+    "id": "user-93",
+    "query": "ما هي المشاريع الطبية للعتبة؟",
+    "historicalTool": "search_projects_db"
+  },
+  {
+    "id": "user-94",
+    "query": "ما هي المناصب التي تقلدها السيد احمد الصافي",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-95",
+    "query": "ما هي المناصب التي تقلدها السيد احمد الصافي؟",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-96",
+    "query": "ما هي سياسة استقبال الوفود الرسمية في العتبة؟",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-97",
+    "query": "ما هي عناوين الاخبار التي تم نشرها حول قسم المخازن لشهر حزيران 2026",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-98",
+    "query": "ما هي عناوين الاخبار التي تم نشرها حول قسم المخازن لشهر حزيران 2026 ؟",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-99",
+    "query": "ما وقت شروق الشمس اليوم في كربلاء؟",
+    "historicalTool": "get_prayer_times"
+  },
+  {
+    "id": "user-100",
+    "query": "ماذا تعرف عن مجمع العباس السكني",
+    "historicalTool": "search_projects_db"
+  },
+  {
+    "id": "user-101",
+    "query": "ماذا عن صلاة التراويح علمني كيف اصليها وهل تقام بالعتبة ؟",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-102",
+    "query": "ماذا عن قسم الانفوغراف كم فيه",
+    "historicalTool": "count_news"
+  },
+  {
+    "id": "user-103",
+    "query": "ماهو احدث انفوغراف",
+    "historicalTool": "get_statistics"
+  },
+  {
+    "id": "user-104",
+    "query": "ماهو اخر خبر نشر",
+    "historicalTool": "get_latest_projects"
+  },
+  {
+    "id": "user-105",
+    "query": "ماهو اسمه",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-106",
+    "query": "ماهو اعلى خبر قراءة خلال شهر اذار",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-107",
+    "query": "ماهو اعلى خبر قراءة في شهر نيسان 2026",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-108",
+    "query": "ماهو اقل خبر تمت قرائته في شهر شباط",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-109",
+    "query": "ماهو اقل خبر تمت قرائته في شهر شباط 2026",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-110",
+    "query": "ماهو اقل خبر قراءة في شهر شباط",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-111",
+    "query": "ماهو اقل خبر قراءة في شهر شباط 2026",
+    "historicalTool": "count_news"
+  },
+  {
+    "id": "user-112",
+    "query": "ماهو اكثر خبر قراءة في شهر اذار",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-113",
+    "query": "ماهو اكثر خبر قراءة في شهر شباط",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-114",
+    "query": "ماهو اول انفوغراف",
+    "historicalTool": "get_statistics"
+  },
+  {
+    "id": "user-115",
+    "query": "ماهو اول مادة انفوغرافية نشرت وفي اي تاريخ",
+    "historicalTool": "get_statistics"
+  },
+  {
+    "id": "user-116",
+    "query": "ماهو وقت الصلاة الويم",
+    "historicalTool": "get_prayer_times"
+  },
+  {
+    "id": "user-117",
+    "query": "ماهي احدث نسبة انجاز مستشفى الزكي ؟",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-118",
+    "query": "ماهي اخر احداثيات انجاز مستشفى الزكي",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-119",
+    "query": "ماهي المشاريع الترفيهية للعتبة العباسية المقدسة",
+    "historicalTool": "search_projects_db"
+  },
+  {
+    "id": "user-120",
+    "query": "ماهي نسبة انجاز مستشفى الزكي",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-121",
+    "query": "ماهي نسبة انجاز مستشفى الزكي ؟",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-122",
+    "query": "متى اول انفوغراف نشر",
+    "historicalTool": "get_statistics"
+  },
+  {
+    "id": "user-123",
+    "query": "متى زيارة الاربعين",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-124",
+    "query": "متى موعد 10 محرم من سنة 1448 هجرية",
+    "historicalTool": null
+  },
+  {
+    "id": "user-125",
+    "query": "متى نشر اول انفوغراف",
+    "historicalTool": "get_statistics"
+  },
+  {
+    "id": "user-126",
+    "query": "متى نشر اول انفوغراف ؟",
+    "historicalTool": "get_statistics"
+  },
+  {
+    "id": "user-127",
+    "query": "معلومات عن صحن أم البنين",
+    "historicalTool": "search_places"
+  },
+  {
+    "id": "user-128",
+    "query": "معلومات عن مشروع صحن أم البنين",
+    "historicalTool": "search_projects_db"
+  },
+  {
+    "id": "user-129",
+    "query": "من اخذ منصب الامين العام ؟",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-130",
+    "query": "من الاخ الاكبر الحسين ام العباس",
+    "historicalTool": null
+  },
+  {
+    "id": "user-131",
+    "query": "من الامين العام قبل مصطفى ضياء الدين",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-132",
+    "query": "من صعنك ؟",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-133",
+    "query": "من صعنك انت",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-134",
+    "query": "من صنعك ؟",
+    "historicalTool": null
+  },
+  {
+    "id": "user-135",
+    "query": "من هو الامين العام",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-136",
+    "query": "من هو الامين العام و المتولي ؟",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-137",
+    "query": "من هو السيد احمد الصفاي",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-138",
+    "query": "من هو خليفة المسلمين الثالث",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-139",
+    "query": "من هو رئيس قسم المشاريع الهندسية",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-140",
+    "query": "من هو عباس الدده",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-141",
+    "query": "من هو مسؤول شعبة تقنية المعلومات",
+    "historicalTool": "search_contacts"
+  },
+  {
+    "id": "user-142",
+    "query": "من هي أم العباس عليه السلام؟",
+    "historicalTool": null
+  },
+  {
+    "id": "user-143",
+    "query": "منو برمجك او صنعك ؟",
+    "historicalTool": null
+  },
+  {
+    "id": "user-144",
+    "query": "هل تستطيع ذكر كم امين عام تولى هذا المنصب ؟",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-145",
+    "query": "هل فعلا وصلت ٧٧٪ مستشفى الزكي من الانجاز",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-146",
+    "query": "هل لديك اي معلومة عن صحن ام البنين",
+    "historicalTool": "search_places"
+  },
+  {
+    "id": "user-147",
+    "query": "هل مذكور بأحد المصادر نسبة مئوية كم وصل انجاز مستشفى الزكي",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-148",
+    "query": "هل مسموح الزواج المؤقت ؟",
+    "historicalTool": "search_projects"
+  },
+  {
+    "id": "user-149",
+    "query": "يعرض صور متسلسلة في الاخبار",
+    "historicalTool": "search_projects"
+  }
+]

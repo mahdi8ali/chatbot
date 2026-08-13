@@ -5,26 +5,8 @@
  * ⚠️ هذا الملف للتسجيل والتحليل فقط — لا يؤثر على منطق OpenAI أو البحث
  */
 
-import mysql from "mysql2/promise"
-import { getDatabaseConfig } from "./site-api-config"
+import { getLogsPool as getPool } from "./logs-db"
 
-let pool: mysql.Pool | null = null
-
-function getPool(): mysql.Pool {
-  if (pool) return pool
-  const cfg = getDatabaseConfig()
-  pool = mysql.createPool({
-    host: cfg.host,
-    port: cfg.port,
-    user: cfg.user,
-    password: cfg.password,
-    database: process.env.LOGS_DB_NAME || process.env.PROJECTS_DB_NAME || cfg.database || "alkafeel_projects",
-    connectionLimit: 5,
-    charset: "utf8mb4",
-    socketPath: process.env.DB_SOCKET || undefined,
-  })
-  return pool
-}
 
 let tablesReady = false
 
@@ -44,6 +26,9 @@ async function ensureTables(): Promise<void> {
       response_time_ms INT DEFAULT 0,
       model_name       VARCHAR(64),
       was_tool_used    TINYINT(1) DEFAULT 0,
+      prompt_tokens    INT DEFAULT 0,
+      completion_tokens INT DEFAULT 0,
+      cached_tokens    INT DEFAULT 0,
       created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
       INDEX idx_created (created_at),
       INDEX idx_session (session_id)
@@ -61,10 +46,35 @@ async function ensureTables(): Promise<void> {
       INDEX idx_rating (rating)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `)
+  // ترحيل: الأعمدة الجديدة لا تُضاف إلى جدول قائم عبر CREATE TABLE IF NOT EXISTS.
+  // نضيفها بمحاولة صامتة (الخطأ يعني أنها موجودة أصلاً) — بلا ALTER تدميري.
+  for (const col of [
+    "prompt_tokens INT DEFAULT 0",
+    "completion_tokens INT DEFAULT 0",
+    "cached_tokens INT DEFAULT 0",
+  ]) {
+    try {
+      await db.execute(`ALTER TABLE chat_logs ADD COLUMN ${col}`)
+      console.log(`[ChatLogger] أُضيف عمود التتبّع: ${col.split(" ")[0]}`)
+    } catch {
+      /* العمود موجود مسبقاً — تجاهل */
+    }
+  }
   tablesReady = true
 }
 
-/** إزالة المعلومات الحساسة قبل الحفظ */
+/**
+ * إزالة المعلومات الحساسة قبل الحفظ.
+ *
+ * ⚠️ الغرض إخفاء بيانات **المستخدمين**، لا أرقام العتبة الرسمية المنشورة أصلاً.
+ * كانت القاعدة `\d{14,16} → [ID]` تبتلع أرقام الأقسام (مثل 009647700479212،
+ * وطولها 15 رقماً)، فصار **كل** جواب اتصال غير قابل للتدقيق من لوحة الإدارة
+ * (القياس: 12 سجلّاً فيها [ID] مقابل صفر سجلّ فيه رقم سليم) — وهي أخطر صنف
+ * من الأجوبة وأولاها بالمراجعة.
+ *
+ * الآن: تُستثنى أرقام العتبة الرسمية (تبدأ بـ 00964 أو +964) من قاعدة [ID]،
+ * وتبقى بقية القواعد كما هي لحماية أرقام المستخدمين وبريدهم ومفاتيحهم.
+ */
 function sanitizePII(text: string): string {
   return text
     .replace(/\b07\d{8,9}\b/g, "[PHONE]")
@@ -72,7 +82,10 @@ function sanitizePII(text: string): string {
     .replace(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g, "[EMAIL]")
     .replace(/\bsk-[A-Za-z0-9\-_]{10,}/g, "[TOKEN]")
     .replace(/\bBearer\s+[A-Za-z0-9\-_.]+/gi, "Bearer [TOKEN]")
-    .replace(/\b\d{14,16}\b/g, "[ID]")
+    // أرقام طويلة مجهولة الهوية → [ID]، عدا أرقام العتبة الرسمية (00964…/+964…)
+    .replace(/\b\d{14,16}\b/g, (m) =>
+      m.startsWith("00964") || m.startsWith("964") ? m : "[ID]"
+    )
 }
 
 export interface ChatLogData {
@@ -86,6 +99,11 @@ export interface ChatLogData {
   responseTimeMs?: number
   modelName?: string
   wasToolUsed?: boolean
+  /** استهلاك الرموز من ردّ OpenAI — أساس حساب الكلفة لكل سؤال. */
+  promptTokens?: number
+  completionTokens?: number
+  /** الرموز المخدومة من التخزين المؤقّت (تُحاسَب بسعر مخفّض). */
+  cachedTokens?: number
 }
 
 /** يحفظ سجل سؤال + جواب ويُرجع الـ id المُدرج كـ string */
@@ -143,7 +161,8 @@ export async function updateChatLog(id: string, data: Omit<ChatLogData, "session
       `UPDATE chat_logs SET
         tool_called = ?, tool_arguments = ?, db_result_ids = ?,
         db_result_count = ?, final_answer = ?, response_time_ms = ?,
-        model_name = ?, was_tool_used = ?
+        model_name = ?, was_tool_used = ?,
+        prompt_tokens = ?, completion_tokens = ?, cached_tokens = ?
        WHERE id = ?`,
       [
         data.toolCalled || null,
@@ -154,6 +173,9 @@ export async function updateChatLog(id: string, data: Omit<ChatLogData, "session
         data.responseTimeMs ?? 0,
         data.modelName || null,
         data.wasToolUsed ? 1 : 0,
+        data.promptTokens ?? 0,
+        data.completionTokens ?? 0,
+        data.cachedTokens ?? 0,
         BigInt(id),
       ]
     )

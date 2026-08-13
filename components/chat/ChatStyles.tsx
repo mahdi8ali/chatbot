@@ -119,6 +119,12 @@ export default function ChatStyles() {
       .gm-bubble br + br { display: block; margin-top: 4px; content: ""; }
       .gm-project-img { width: 100%; max-width: 340px; height: auto; border-radius: 10px; margin: 10px 0; display: block; border: 1px solid #e8eaed; object-fit: cover; cursor: zoom-in; transition: transform 0.2s ease, box-shadow 0.2s ease; }
       .gm-project-img:hover { transform: scale(1.02); box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+      /* أغلفة الإصدارات (publications/img/) ملفات مصدرها الحقيقي 84×119px تقريباً
+         (تحقّقت مباشرة) — تمديدها لعرض 340px كبقية صور gm-project-img (مصادرها
+         أعلى دقّة بكثير، مثل صور المشاريع 2000×1125px) يُنتج تكبيراً ~4x فتظهر
+         مموّهة. لا حلّ CSS يستعيد تفصيلاً غير موجود أصلاً في الملف المصدر، لكن
+         عرضاً أصغر يقلّل التمديد والتمويه الناتج عنه إلى النصف تقريباً. */
+      .gm-project-img[src*="/publications/img/"] { max-width: 160px; }
 
       /* Image gallery grid */
       .gm-img-gallery { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0; direction: rtl; }

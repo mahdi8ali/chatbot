@@ -24,6 +24,9 @@ export const COOKIE_NAME = "admin_session"
 const SCRYPT_KEYLEN = 64
 const DEFAULT_TTL_HOURS = 8
 
+/** الحدّ الأدنى لطول سرّ التوقيع (32 بايت hex = 64 محرفاً؛ نقبل 32 محرفاً كحدّ أدنى متساهل). */
+const MIN_SECRET_LENGTH = 32
+
 // ===== (أ) تجزئة كلمة المرور (scrypt) =====
 
 /**
@@ -60,18 +63,49 @@ interface SessionPayload {
 
 const b64url = (b: Buffer): string => b.toString("base64url")
 
-function sign(data: string): string {
-  return createHmac("sha256", process.env.ADMIN_SESSION_SECRET ?? "")
-    .update(data)
-    .digest("base64url")
+/**
+ * يقرأ سرّ التوقيع من البيئة، أو null إن غاب أو كان أقصر من الحدّ الأدنى.
+ *
+ * ⚠️ حاسم أمنياً: السلوك السابق كان `?? ""` — أي أن غياب السرّ يعني توقيعاً
+ * بمفتاح HMAC فارغ، فيستطيع أي طرف يعرف بنية الحمولة توليد كوكي جلسة صالحة
+ * والوصول إلى لوحة الإدارة كاملةً. الآن: غياب السرّ ⇒ لا توقيع ولا تحقّق
+ * (مغلق افتراضياً — fail closed)، متّسقاً مع سلوك lookupAdmin.
+ */
+function getSessionSecret(): string | null {
+  const secret = process.env.ADMIN_SESSION_SECRET
+  if (!secret || secret.length < MIN_SECRET_LENGTH) return null
+  return secret
+}
+
+/**
+ * هل مصادقة الإدارة مُهيّأة بالكامل؟ (اسم مستخدم + تجزئة كلمة مرور + سرّ جلسة سليم)
+ * تستعملها مسارات الـ API لإرجاع خطأ إعداد صريح بدل فشل غامض.
+ */
+export function isAdminAuthConfigured(): boolean {
+  return Boolean(
+    process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD_HASH && getSessionSecret()
+  )
+}
+
+function sign(data: string, secret: string): string {
+  return createHmac("sha256", secret).update(data).digest("base64url")
 }
 
 /**
  * ينشئ قيمة كوكي جلسة موقّعة للمستخدم.
  * الصيغة: "<payloadBase64url>.<signatureBase64url>" حيث payload = { sub, iat, exp }.
  * exp = iat + TTL (افتراضي 8 ساعات، أو ADMIN_SESSION_TTL_HOURS).
+ *
+ * @throws إن غاب ADMIN_SESSION_SECRET أو كان أقصر من MIN_SECRET_LENGTH — لا نُصدر
+ *         جلسة بمفتاح ضعيف إطلاقاً.
  */
 export function createSession(username: string): string {
+  const secret = getSessionSecret()
+  if (!secret) {
+    throw new Error(
+      "ADMIN_SESSION_SECRET غير مضبوط أو أقصر من 32 محرفاً — تسجيل دخول الإدارة معطّل."
+    )
+  }
   const ttlH = Number(process.env.ADMIN_SESSION_TTL_HOURS ?? DEFAULT_TTL_HOURS)
   const now = Math.floor(Date.now() / 1000)
   const payload: SessionPayload = {
@@ -80,22 +114,32 @@ export function createSession(username: string): string {
     exp: now + ttlH * 3600,
   }
   const body = b64url(Buffer.from(JSON.stringify(payload)))
-  return `${body}.${sign(body)}`
+  return `${body}.${sign(body, secret)}`
 }
 
 /**
  * يتحقّق من قيمة كوكي الجلسة: يعيد { username } عند صحّة التوقيع وعدم انتهاء exp،
  * وإلا null. مقارنة التوقيع ثابتة الزمن (timingSafeEqual) لمنع تسريب التوقيت.
+ *
+ * مغلق افتراضياً: عند غياب ADMIN_SESSION_SECRET (أو قِصَره) تُرفض كل الجلسات،
+ * فلا يمكن تزوير كوكي بمفتاح فارغ.
  */
 export function verifySession(
   value: string | undefined | null
 ): { username: string } | null {
   if (!value) return null
+  const secret = getSessionSecret()
+  if (!secret) {
+    console.error(
+      "[Admin Auth] ADMIN_SESSION_SECRET غائب أو أقصر من 32 محرفاً — رُفضت الجلسة (مغلق افتراضياً)."
+    )
+    return null
+  }
   const dot = value.lastIndexOf(".")
   if (dot <= 0) return null
   const body = value.slice(0, dot)
   const givenSig = value.slice(dot + 1)
-  const expectedSig = sign(body)
+  const expectedSig = sign(body, secret)
   const a = Buffer.from(givenSig)
   const b = Buffer.from(expectedSig)
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null // توقيع غير مطابق ⇒ مرفوض

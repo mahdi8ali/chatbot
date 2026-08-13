@@ -18,6 +18,67 @@ export interface ValidationResult {
 // ===== الفئات المسموح بها =====
 const VALID_CATEGORIES = ["faq", "stance"] as const
 
+// ===== حدّ التحديد الأدنى للأنماط =====
+//
+// ⚠️ سبب وجود هذا الحارس: النمط الفضفاض يخطف أسئلة لا تخصّه. مدخلة «أم العباس»
+// لو حملت نمطاً عاماً مثل «العباس» لأصابت كل سؤال عن العباس (استشهاده، مرقده،
+// صفاته) بجواب عن أمّه. وقد حدث هذا فعلاً وأدّى إلى حذف محتوى سليم.
+// الترتيب الجديد في matchCurated (الأكثر تحديداً يفوز) يخفّف الأثر لكنه لا
+// يمنعه: إن كان النمط العام هو المطابق الوحيد فسيفوز حتماً. فالمنع هنا.
+
+/** أقصر طول مقبول لنمط من كلمة واحدة (بعد التقليم). */
+const MIN_SINGLE_WORD_PATTERN_LENGTH = 4
+
+/** تطبيع خفيف للمقارنة مع قائمة الكلمات العامة (توحيد الهمزات والتاء والياء). */
+function normalizeForBreadthCheck(s: string): string {
+  return s
+    .replace(/[ًٌٍَُِّْـ]/g, "")
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/ى/g, "ي")
+    .trim()
+    .toLowerCase()
+}
+
+/**
+ * كلمات مفردة شديدة الشيوع في نطاق العتبة — لا تصلح نمطاً وحدها.
+ * ⚠️ تُطبَّع عند التحميل: بدون ذلك تنجو صيغ مثل «العتبة» (بالتاء المربوطة) من
+ * الفحص لأن المقارنة تجري على النصّ المطبّع «العتبه».
+ */
+const OVERLY_BROAD_TERMS: ReadonlySet<string> = new Set(
+  [
+    "العباس", "عباس", "الحسين", "حسين", "علي", "الكفيل", "كفيل",
+    "العتبة", "عتبة", "العباسية", "عباسية", "المقدسة", "مقدسة",
+    "كربلاء", "الامام", "إمام", "امام", "السيد", "سيد", "الشيخ", "شيخ",
+    "مشروع", "مشاريع", "خبر", "اخبار", "أخبار", "قسم", "اقسام", "أقسام",
+    "زيارة", "موقع", "معلومات", "تفاصيل",
+    "ما", "من", "هل", "اين", "أين", "متى", "كيف", "كم",
+  ].map(normalizeForBreadthCheck)
+)
+
+/**
+ * يتحقّق أن النمط محدّد بما يكفي.
+ * يُعيد رسالة خطأ عربية عند الرفض، أو null عند القبول.
+ *
+ * القاعدة: الأنماط متعددة الكلمات مقبولة دائماً (تحديدها كافٍ). أمّا نمط الكلمة
+ * الواحدة فيجب ألّا يكون قصيراً جداً ولا من الكلمات شديدة الشيوع في هذا النطاق.
+ */
+export function checkPatternBreadth(pattern: string): string | null {
+  const trimmed = pattern.trim()
+  const words = trimmed.split(/\s+/).filter(Boolean)
+  if (words.length === 0) return null // يلتقطه فحص الفراغ
+  if (words.length > 1) return null   // متعدد الكلمات ⇒ محدّد بما يكفي
+
+  const norm = normalizeForBreadthCheck(trimmed)
+  if (norm.length < MIN_SINGLE_WORD_PATTERN_LENGTH) {
+    return `النمط «${trimmed}» قصير جداً وسيطابق أسئلة كثيرة لا تخصّه. استعمل عبارة من كلمتين فأكثر.`
+  }
+  if (OVERLY_BROAD_TERMS.has(norm)) {
+    return `النمط «${trimmed}» كلمة شائعة جداً في محتوى العتبة، ولو قُبل لخطف كل سؤال يذكرها. استعمل عبارة أدقّ مثل «${trimmed} عليه السلام» أو «متى استشهد ${trimmed}».`
+  }
+  return null
+}
+
 /**
  * ينظّف مصفوفة أنماط: تقليم + إسقاط الفارغ + إزالة التكرار (يحافظ على الترتيب).
  */
@@ -97,6 +158,11 @@ export function validateCuratedInput(
     const cleaned = cleanPatterns(input.patterns as string[])
     if (cleaned.length === 0) {
       return { ok: false, error: "يجب إدخال نمط واحد على الأقل" }
+    }
+    // حارس التحديد: يمنع النمط الفضفاض من الدخول أصلاً (انظر checkPatternBreadth)
+    for (const p of cleaned) {
+      const breadthError = checkPatternBreadth(p)
+      if (breadthError) return { ok: false, error: breadthError }
     }
     value.patterns = cleaned
   }

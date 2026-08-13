@@ -1,16 +1,17 @@
 /**
  * news-service.ts — بيانات الأخبار من جدول `news`
- * يغطي: search_news, get_latest, filter_categories, get_statistics
+ * يغطي: البحث في الأخبار، أحدثها، تصنيفاتها، وإحصاءاتها
  */
 
 import mysql, { RowDataPacket } from "mysql2/promise"
+import { countProjects } from "./projects-db-service"
 import {
   APICallResult, getPool,
   stripHtml, excerpt, normalizeArabicWord, consonantSkeleton, buildTitleExtras
 } from "./db"
 
 // ── Interface ────────────────────────────────────────────────────────────────
-interface NewsRow extends RowDataPacket {
+export interface NewsRow extends RowDataPacket {
   id: number
   title: string
   title_2: string | null
@@ -31,7 +32,7 @@ function getNewsUrl(id: number): string {
   return `https://alkafeel.net/news/index.php?id=${id}`
 }
 
-function mapNewsToItem(row: NewsRow) {
+export function mapNewsToItem(row: NewsRow) {
   const categoryName = row.type_name || (row.category_id ? `تصنيف ${row.category_id}` : "أخبار شبكة الكفيل")
   const strippedContent = stripHtml(row.content || "")
   const description = strippedContent.length <= 2500 ? strippedContent : strippedContent.slice(0, 2500) + "..."
@@ -205,20 +206,16 @@ export async function siteGetStatistics(): Promise<APICallResult> {
     video_count = Number((vrows as any[])[0]?.cnt ?? 0)
   } catch {}
 
-  // عدد المشاريع من قاعدة المشاريع المنفصلة
+  // عدد المشاريع من قاعدة المشاريع المنفصلة.
+  // ⚠️ كان هذا الموضع يفتح اتصالاً جديداً بلا كتلة finally: أي خطأ في الاستعلام
+  // يترك الاتصال مفتوحاً (تسريب) والخطأ يُبتلع صامتاً. الآن نستعمل البِركة
+  // المشتركة لقاعدة المشاريع — بلا اتصال جديد أصلاً، فلا شيء يُسرَّب.
   let projects_count = 0
   try {
-    const { getDatabaseConfig } = require("./site-api-config")
-    const cfg = getDatabaseConfig()
-    const projDb = await mysql.createConnection({
-      host: cfg.host, port: cfg.port, user: cfg.user, password: cfg.password,
-      database: process.env.PROJECTS_DB_NAME || "alkafeel_projects",
-      charset: "utf8mb4", socketPath: process.env.DB_SOCKET || undefined,
-    })
-    const [prows] = await projDb.query("SELECT COUNT(*) AS cnt FROM projects WHERE deleted_at IS NULL")
-    projects_count = Number((prows as any[])[0]?.cnt ?? 0)
-    await projDb.end()
-  } catch (e) { console.error("[stats] projects count error:", e) }
+    projects_count = await countProjects()
+  } catch (e) {
+    console.error("[stats] projects count error:", e)
+  }
 
   return {
     success: true,

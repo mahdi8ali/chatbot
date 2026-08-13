@@ -8,51 +8,135 @@ const svgArrow = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" st
 
 const ATTACH_IMG_RE = /^!\[([^\]]*)\]\((https:\/\/projects\.alkafeel\.net\/uploads\/projects\/attachments\/thumb\/[^)]+)\)$/
 
+// ────────────────────────────────────────────────────────────────────────────
+//  التهريب وسلامة الروابط
+//  ⚠️ كل ناتج هذا الملف يُحقن عبر dangerouslySetInnerHTML في MessageList.
+//  لذلك: أي قيمة تدخل نصّاً أو سمة HTML يجب أن تمرّ بـ escapeHtml/escapeAttr،
+//  وأي رابط يجب أن يمرّ بـ safeUrl/safeAssetUrl. المصدر غير موثوق: نصّ النموذج
+//  مشتقّ من محتوى قاعدة البيانات ومن رسالة المستخدم (حقن غير مباشر ممكن).
+// ────────────────────────────────────────────────────────────────────────────
+
+/** يهرّب النصّ المعروض (يشمل علامتَي الاقتباس لأن النصّ قد يقع داخل سمة). */
+function escapeHtml(value: string): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
+/** يهرّب قيمة تُوضَع داخل سمة HTML (نفس القواعد — اسم صريح لتوضيح القصد). */
+const escapeAttr = escapeHtml
+
+/** البروتوكولات المسموح بها في الروابط. أي شيء آخر (javascript:, data:, vbscript:) يُرفض. */
+const SAFE_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:"])
+
+/** نطاقات الصور المسموح تحميلها (منع تسريب المُحيل/التتبّع عبر صور خارجية). */
+const ALLOWED_IMAGE_HOSTS = [
+  "alkafeel.net",
+  "projects.alkafeel.net",
+  "static1.alkafeel.net",
+  "www.alkafeel.net",
+]
+
+/**
+ * يتحقّق أن الرابط بروتوكوله مسموح، ويعيده مُهرَّباً جاهزاً لسمة href.
+ * يعيد null عند الرفض (بروتوكول خطر أو رابط غير قابل للتحليل) فيسقط المتصل الرابط.
+ * الروابط النسبية (تبدأ بـ "/") مقبولة لأنها ضمن نفس الأصل.
+ */
+function safeUrl(raw: string): string | null {
+  const value = String(raw ?? "").trim()
+  if (!value) return null
+  if (value.startsWith("/") && !value.startsWith("//")) return escapeAttr(value)
+  try {
+    const u = new URL(value)
+    if (!SAFE_PROTOCOLS.has(u.protocol)) return null
+    return escapeAttr(u.toString())
+  } catch {
+    return null
+  }
+}
+
+/**
+ * كـ safeUrl لكن لأصول الكفيل (صور، فيديو، بطاقات الفيديو): https فقط ومن
+ * النطاقات المعروفة. يمنع تحميل أصول من خوادم خارجية (تتبّع/تسريب المُحيل)
+ * ويمنع بطاقة فيديو تنتحل مصدراً رسمياً وتشير إلى موقع خارجي.
+ */
+function safeAssetUrl(raw: string): string | null {
+  const value = String(raw ?? "").trim()
+  if (!value) return null
+  if (value.startsWith("/") && !value.startsWith("//")) return escapeAttr(value)
+  try {
+    const u = new URL(value)
+    if (u.protocol !== "https:") return null
+    const host = u.hostname.toLowerCase()
+    const ok = ALLOWED_IMAGE_HOSTS.some(h => host === h || host.endsWith("." + h))
+    if (!ok) return null
+    return escapeAttr(u.toString())
+  } catch {
+    return null
+  }
+}
+
 function buildGalleryLoadingHtml(count: number): string {
   return '<div class="gm-img-gallery gm-gallery-loading">' +
     '<div class="gm-thumb-wrap"></div>'.repeat(count) +
     '</div>'
 }
 
-const BROKEN_IMG_STYLE = 'width:80px;height:80px;object-fit:contain;border-radius:6px;opacity:0.35;'
-
 function buildGalleryBlock(lines: string[]): string {
   const thumbs = lines.map((line, i) => {
     const m = line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
     if (!m) return ""
-    const alt = m[1] || ("صورة " + (i + 1))
-    const thumbSrc = m[2]
-    const originalSrc = thumbSrc.replace("/attachments/thumb/", "/attachments/")
-    return `<div class="gm-thumb-wrap"><img class="gm-thumb" src="${thumbSrc}" alt="${alt}" loading="lazy" data-original="${originalSrc}" onerror="this.style='${BROKEN_IMG_STYLE}';this.src='/broken-img.svg'" /></div>`
+    const alt = escapeAttr(m[1] || ("صورة " + (i + 1)))
+    const thumbSrc = safeAssetUrl(m[2])
+    if (!thumbSrc) return ""
+    // نمرّر الأصل عبر data-original (يقرأه lightbox في MessageList).
+    const originalSrc = safeAssetUrl(m[2].replace("/attachments/thumb/", "/attachments/")) || thumbSrc
+    // بلا onerror مضمّن: المعالجة تتم عبر تفويض الأحداث في MessageList (data-gm-fallback).
+    return `<div class="gm-thumb-wrap"><img class="gm-thumb" src="${thumbSrc}" alt="${alt}" loading="lazy" data-original="${originalSrc}" data-gm-fallback="1" /></div>`
   }).join("")
   return `<div class="gm-img-gallery">${thumbs}</div>`
 }
 
 function processPlainText(raw: string): string {
-  let html = raw
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
+  // التهريب أولاً على كامل النصّ (يشمل " و ' كي لا تُكسر السمات لاحقاً)،
+  // ثم يُبنى الـ HTML فوق نصّ مُهرَّب — فلا يمكن لمحتوى النموذج حقن عناصر أو سمات.
+  let html = escapeHtml(raw)
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
     .replace(
       /!\[([^\]]*)\]\(([^)]+)\)/g,
-      '<img class="gm-project-img" src="$2" alt="$1" loading="lazy" />'
+      (match, alt, src) => {
+        // src هنا مُهرَّب مسبقاً؛ نفكّ &amp; فقط ليصحّ تحليل الـ URL ثم نعيد التهريب.
+        const safe = safeAssetUrl(String(src).replace(/&amp;/g, "&"))
+        if (!safe) return escapeHtml(String(alt || ""))
+        return `<img class="gm-project-img" src="${safe}" alt="${escapeAttr(alt)}" loading="lazy" />`
+      }
     )
     .replace(
       /\[([^\]]+)\]\((https:\/\/maps\.google\.com\/\?q=([-\d.]+),([-\d.]+))\)/g,
       (_, label, url, lat, lng) => {
         const fLat = parseFloat(lat)
         const fLng = parseFloat(lng)
+        if (!Number.isFinite(fLat) || !Number.isFinite(fLng)) return String(label)
+        const safe = safeUrl(String(url).replace(/&amp;/g, "&"))
+        if (!safe) return String(label)
         const d = 0.004
+        // الإحداثيات أعداد مُتحقَّق منها (Number.isFinite) ⇒ آمنة داخل الـ URL.
         const bbox = `${fLng - d},${fLat - d},${fLng + d},${fLat + d}`
-        const embedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${fLat},${fLng}`
-        return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="gm-maps-link">${label}</a><div class="gm-map-preview"><div class="gm-map-clip"><iframe src="${embedUrl}" width="210" height="145" frameborder="0" scrolling="no" loading="lazy" title="خريطة الموقع"></iframe></div></div>`
+        const embedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&amp;layer=mapnik&amp;marker=${fLat},${fLng}`
+        return `<a href="${safe}" target="_blank" rel="noopener noreferrer" class="gm-maps-link">${label}</a><div class="gm-map-preview"><div class="gm-map-clip"><iframe src="${embedUrl}" width="210" height="145" frameborder="0" scrolling="no" loading="lazy" title="خريطة الموقع"></iframe></div></div>`
       }
     )
     .replace(
       /\[([^\]]+)\]\(([^)]+)\)/g,
-      '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
+      (match, label, url) => {
+        const safe = safeUrl(String(url).replace(/&amp;/g, "&"))
+        if (!safe) return String(label) // بروتوكول مرفوض (javascript:…) ⇒ يبقى النصّ بلا رابط
+        return `<a href="${safe}" target="_blank" rel="noopener noreferrer">${label}</a>`
+      }
     )
     .replace(/^(\d+)\.\s+(.+)$/gm, "<li>$2</li>")
     .replace(/^[-•]\s+(.+)$/gm, "<li>$1</li>")
@@ -76,12 +160,13 @@ function buildContactCard(seg: { lines: string[]; name?: string }): string {
     let rowClass = "gm-contact-row"
     if (firstChar === "📞") { svgIcon = svgPhone; rowClass += " phone" }
     else if (firstChar === "📧") { svgIcon = svgMail; rowClass += " email" }
-    const formatted = content
+    // تهريب المحتوى قبل بناء الروابط التلقائية (الأنماط أرقام/بريد فقط ⇒ آمنة داخل href).
+    const formatted = escapeHtml(content)
       .replace(/(00964\d{7,12})/g, n => `<a class="gm-phone-link" href="tel:${n}">${n}</a>`)
       .replace(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g, e => `<a class="gm-email-link" href="mailto:${e}">${e}</a>`)
     return `<div class="${rowClass}"><span class="ci-icon">${svgIcon}</span><span>${formatted}</span></div>`
   }).join("")
-  return `<div class="gm-contact-block"><div class="gm-contact-name">${seg.name}</div>${rowsHtml}</div>`
+  return `<div class="gm-contact-block"><div class="gm-contact-name">${escapeHtml(seg.name || "")}</div>${rowsHtml}</div>`
 }
 
 function buildSourcesBlock(sourceLines: string[]): string {
@@ -93,24 +178,28 @@ function buildSourcesBlock(sourceLines: string[]): string {
     if (isVideo) {
       // البحث عن أي رابط mp4 في السطر بغض النظر عن الصيغة
       const mp4UrlMatch = line.match(/https?:\/\/[^\s"'<>)\]]+\.mp4/i)
-      if (mp4UrlMatch) {
-        const mp4Url = mp4UrlMatch[0]
+      const mp4Url = mp4UrlMatch ? safeAssetUrl(mp4UrlMatch[0]) : null
+      if (mp4Url) {
         // استخراج العنوان: كل النص بين 🎬 وأول [ (بداية الرابط)
         const beforeLink = line.split('[')[0]  // كل ما قبل أول [
-        const title = beforeLink
-          .replace(/^🎬/, '')
-          .replace(/\*/g, '')
-          .replace(/\s*—.*$/, '')
-          .trim() || 'فيديو'
+        const title = escapeHtml(
+          beforeLink
+            .replace(/^🎬/, '')
+            .replace(/\*/g, '')
+            .replace(/\s*—.*$/, '')
+            .trim() || 'فيديو'
+        )
         // استخراج request_id من رابط MP4 وبناء رابط الصورة المصغّرة
-        const reqMatch = mp4Url.match(/\/videos\/([a-f0-9]+)\/[a-f0-9]+\.mp4$/i)
+        // (المُعرّف hex فقط بحكم التعبير النمطي ⇒ آمن داخل الرابط)
+        const reqMatch = mp4UrlMatch![0].match(/\/videos\/([a-f0-9]+)\/[a-f0-9]+\.mp4$/i)
         const posterUrl = reqMatch
           ? `https://alkafeel.net/videos/mcroped/765/${reqMatch[1]}.jpg`
           : ''
         const svgPlay = `<svg viewBox="0 0 24 24" fill="white"><polygon points="6,3 20,12 6,21"/></svg>`
+        // بلا onclick مضمّن: التشغيل يُعالَج بتفويض الأحداث في MessageList (data-gm-video).
         return `<div class="gm-video-player">
           <div class="gm-video-title-bar">${svgVideo} <span>${title}</span></div>
-          <div class="gm-video-wrapper" onclick="var w=this;var v=w.querySelector('video');w.classList.add('gm-playing');v.controls=true;v.play();">
+          <div class="gm-video-wrapper" data-gm-video="1">
             ${posterUrl ? `<img class="gm-poster-img" src="${posterUrl}" alt="" />` : `<div style="aspect-ratio:16/9;background:#111"></div>`}
             <div class="gm-play-overlay">
               <div class="gm-play-btn">${svgPlay}</div>
@@ -121,12 +210,15 @@ function buildSourcesBlock(sourceLines: string[]): string {
           </div>
         </div>`
       }
-      // فيديو بدون mp4 مباشر → بطاقة بصرية
+      // فيديو بدون mp4 مباشر → بطاقة بصرية.
+      // نستعمل safeAssetUrl (لا safeUrl) لأن بطاقة الفيديو تُعرض كمصدر رسمي؛
+      // رابط فيديو خارجي هنا يعني انتحال مصدر، وكل روابط الفيديو الحقيقية
+      // تأتي من video-service بنطاق alkafeel.net/media أو static1.alkafeel.net.
       const linkMatch = line.match(/\[([^\]]+)\]\(([^)]+)\)/)
-      const url   = linkMatch ? linkMatch[2] : ""
-      const label = linkMatch ? linkMatch[1] : ""
+      const url   = linkMatch ? safeAssetUrl(linkMatch[2]) : null
+      const label = escapeHtml(linkMatch ? linkMatch[1] : "")
       if (!url) return ""
-      const meta = line.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "").replace(/[📖🎬🔗]/g, "").replace(/\*([^*]*)\*/g, "$1").replace(/—\s*🔗\s*$/, "").replace(/—\s*$/, "").trim()
+      const meta = escapeHtml(line.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "").replace(/[📖🎬🔗]/g, "").replace(/\*([^*]*)\*/g, "$1").replace(/—\s*🔗\s*$/, "").replace(/—\s*$/, "").trim())
       const cardTitle = meta || label
       const svgPlay = `<svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="12" fill="rgba(255,255,255,0.15)"/><polygon points="9.5,7 18,12 9.5,17" fill="white"/></svg>`
       return `<a class="gm-video-card" href="${url}" target="_blank" rel="noopener noreferrer">
@@ -142,16 +234,17 @@ function buildSourcesBlock(sourceLines: string[]): string {
     }
 
     const linkMatch = line.match(/\[([^\]]+)\]\(([^)]+)\)/)
-    const url   = linkMatch ? linkMatch[2] : ""
-    const label = linkMatch ? linkMatch[1] : ""
-    if (!url || url === "" || url === "#") return ""
-    const meta = line
+    const rawUrl = linkMatch ? linkMatch[2] : ""
+    const url   = rawUrl && rawUrl !== "#" ? safeUrl(rawUrl) : null
+    const label = escapeHtml(linkMatch ? linkMatch[1] : "")
+    if (!url) return ""
+    const meta = escapeHtml(line
       .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "")
       .replace(/[📖🎬🔗]/g, "")
       .replace(/\*([^*]*)\*/g, "$1")
       .replace(/—\s*🔗\s*$/, "")
       .replace(/—\s*$/, "")
-      .trim()
+      .trim())
     const cardTitle = meta || label
     const iconSvg = isLink ? svgLinkOut : svgBook
     return `<a class="gm-source-card" href="${url}" target="_blank" rel="noopener noreferrer">

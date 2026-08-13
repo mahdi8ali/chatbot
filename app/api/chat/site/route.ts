@@ -1,11 +1,12 @@
 import {
   getSiteSystemPrompt,
   getFallbackResponse,
-  FALLBACK_OUT_OF_SCOPE
+  FALLBACK_OUT_OF_SCOPE,
+  FALLBACK_SMALLTALK
 } from "@/lib/server/system-prompts"
 import { matchCurated } from "@/lib/server/curated-service"
 import { kbSearch, SHORT_CIRCUIT_THRESHOLD } from "@/lib/server/kb-service"
-import { classifyScope } from "@/lib/server/scope-guard"
+import { classifyScope, isSmallTalk } from "@/lib/server/scope-guard"
 import { getOpenAIModel } from "@/lib/server/site-api-config"
 import { ALL_SITE_TOOLS } from "@/lib/server/site-tools-definitions"
 import { resolveToolCalls } from "@/lib/server/function-calling-handler"
@@ -18,12 +19,39 @@ import {
   sanitizeMessages,
   logSecurityIssue
 } from "@/lib/server/data-sanitizer"
-import { saveChatLog, createPendingLog, updateChatLog } from "@/lib/server/chat-logger"
+import { createPendingLog, updateChatLog } from "@/lib/server/chat-logger"
+import { corsHeaders, isAllowedOrigin, forbiddenOrigin } from "@/lib/server/cors"
+import { hitSharedLimit } from "@/lib/server/rate-limit-store"
 import OpenAI from "openai"
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions.mjs"
 
 // قصر المسار عالي الثقة (خيار معطّل افتراضياً)
 const KB_SHORT_CIRCUIT_ENABLED = false
+
+/**
+ * سقف رموز الجواب النهائي — **شبكة أمان لا أداة اختصار**.
+ *
+ * كان 500، وهو ما كان يقطع الجواب في منتصف الكلمة بدل أن يجعله موجزاً: النموذج
+ * لا يرى الحدّ فيخطّط لجواب كامل ثم يُبتر. والأسوأ أن كتلة المصادر تقع في آخر
+ * الجواب فتكون أوّل الضحايا.
+ *
+ * القياس على 260 جواباً حقيقياً في chat_logs: الوسيط 427 محرفاً فقط (الإيجاز هو
+ * النمط السائد أصلاً)، و12.7% فقط تتجاوز 1100 محرف — وهي تحديداً أجوبة القوائم
+ * (أرقام هواتف، مشاريع، عيّنات تحليل) التي تحتاج طولها. أي أن الحدّ لم يكن
+ * يختصر الأجوبة العادية، بل يبتر ما يحتاج الاكتمال.
+ *
+ * الاختصار الحقيقي يُضبط في الموجّه («ميزانية الطول» في system-prompts.ts) حيث
+ * يخطّط النموذج لجواب قصير من البداية. وهذا السقف يبقى حاجزاً ضد التوليد الجامح
+ * فقط: 1000 رمز ≈ 2200 محرفاً — فوق أطول جواب لوحظ (1568) بهامش مريح.
+ */
+const FINAL_ANSWER_MAX_TOKENS = 1000
+
+/**
+ * حدود المعدّل المشتركة (عبر قاعدة البيانات) — تُطبَّق على مستوى كل الـ instances.
+ * أوسع قليلاً من حدّ الذاكرة (20/دقيقة) لأنها الطبقة المُلزِمة الأخيرة لا الأولى.
+ */
+const SHARED_RATE_LIMIT = Number(process.env.CHAT_RATE_LIMIT || "30")
+const SHARED_RATE_WINDOW_MS = Number(process.env.CHAT_RATE_WINDOW_MS || String(60 * 1000))
 
 /**
  * استخراج IDs المقالات التي أرجعتها الأدوات فعلاً
@@ -135,31 +163,19 @@ function stripInvalidLinks(text: string, validIds: Set<string>): string {
 
 
 /**
- * CORS Headers - السماح فقط من دومين محدد
- */
-const ALLOWED_ORIGINS = [
-  process.env.SITE_DOMAIN || "https://alkafeel.net",
-  "http://localhost:3000", // للتطوير
-  "http://localhost:3001", // للتطوير (بديل)
-  "null" // للـ file:// protocol (HTML files)
-]
-
-/**
- * Security Headers
+ * Security Headers — قائمة الأصول البيضاء تعيش في lib/server/cors.ts
+ * (مشتركة مع /api/chat/feedback كي لا تنحرف النقطتان).
  */
 function getSecurityHeaders(origin?: string | null): HeadersInit {
-  // السماح لأي origin لأن الودجت يُضمّن في مواقع خارجية
   return {
-    "Access-Control-Allow-Origin": origin || "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    ...corsHeaders(origin, "POST, OPTIONS"),
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Expose-Headers": "X-Chat-Log-Id",
-    "Access-Control-Max-Age": "86400",
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "X-XSS-Protection": "1; mode=block",
     "Referrer-Policy": "strict-origin-when-cross-origin",
-    "Content-Security-Policy": "default-src 'self'",
+    "Content-Security-Policy": "default-src 'none'",
   }
 }
 
@@ -167,9 +183,11 @@ function getSecurityHeaders(origin?: string | null): HeadersInit {
  * معالجة OPTIONS request (CORS Preflight)
  */
 export async function OPTIONS(request: Request) {
+  const origin = request.headers.get("origin")
+  if (origin && !isAllowedOrigin(origin)) return forbiddenOrigin(origin)
   return new Response(null, {
     status: 204,
-    headers: getSecurityHeaders(request.headers.get("origin"))
+    headers: getSecurityHeaders(origin)
   })
 }
 
@@ -193,6 +211,9 @@ export async function POST(request: Request) {
   const origin = request.headers.get("origin")
   const securityHeaders = getSecurityHeaders(origin)
 
+  // حجب الأصول غير المصرّح بها قبل أي عمل (قبل OpenAI وقبل قاعدة البيانات).
+  if (origin && !isAllowedOrigin(origin)) return forbiddenOrigin(origin)
+
   try {
     // ✅ Phase 4.1: Rate Limiting - حماية من Spam
     const rateLimitResult = applyRateLimit(request, {
@@ -208,6 +229,22 @@ export async function POST(request: Request) {
 
       return createRateLimitResponse(
         rateLimitResult.retryAfter!,
+        "تجاوزت الحد المسموح من الطلبات. يُرجى المحاولة بعد قليل."
+      )
+    }
+
+    // ✅ الحدّ المشترك (مدعوم بقاعدة البيانات) — الطبقة المُلزِمة فعلياً.
+    // الحدّ في الذاكرة أعلاه يبقى خطّ دفاع أول رخيص، لكنه لكل عملية على حدة
+    // فلا يحكم عند تعدّد الـ instances ولا يصمد عبر إعادة التشغيل.
+    const shared = await hitSharedLimit(
+      `chat:${rateLimitResult.ip}`,
+      SHARED_RATE_LIMIT,
+      SHARED_RATE_WINDOW_MS
+    )
+    if (!shared.allowed) {
+      console.warn(`[Rate Limit] Shared limit blocked ${rateLimitResult.ip} (${shared.hits} hits)`)
+      return createRateLimitResponse(
+        shared.retryAfter!,
         "تجاوزت الحد المسموح من الطلبات. يُرجى المحاولة بعد قليل."
       )
     }
@@ -267,19 +304,9 @@ export async function POST(request: Request) {
       lastMessage.content = validation.sanitized!
     }
 
-    // الحصول على OpenAI API Key من البيئة (لا نحتاج Supabase لـ site API)
-    const openaiApiKey = process.env.OPENAI_API_KEY
-    if (!openaiApiKey) {
-      throw new Error("OPENAI_API_KEY not found in environment")
-    }
-
-    // الحصول على النموذج من البيئة
-    const model = getOpenAIModel()
-
-    // إنشاء عميل OpenAI
-    const openai = new OpenAI({
-      apiKey: openaiApiKey
-    })
+    // ملاحظة: فحص OPENAI_API_KEY أُخّر إلى ما قبل أول استعمال فعلي للنموذج.
+    // مسارات القصر أدناه (المخزن المنسّق، قاعدة المعرفة، حارس النطاق) مصمّمة
+    // للعمل بلا OpenAI إطلاقاً، وكان الفحص المبكّر يُفشلها بـ 500 عند غياب المفتاح.
 
     // ===== فحص المخزن المنسّق أولاً (بديل searchFAQ) =====
     // إذا تطابق سؤال المستخدم مع إجابة منسّقة موثوقة، أرسلها مباشرةً دون الاتصال بـ OpenAI
@@ -380,6 +407,42 @@ export async function POST(request: Request) {
     // إذا كان السؤال خارج النطاق (تحويل هجري/ميلادي أو توقيت مناسبة) نعتذر مباشرةً
     // بنفس نمط قصر مسار FAQ دون استدعاء أي أداة
     // ملاحظة: يُتخطّى منطقياً عند وجود إصابة KB مؤكّدة (لدينا معرفة صريحة عن السؤال)
+    // ===== حارس المجاملات (قصر مسار للتحيات والشكر) =====
+    // tool_choice:"required" يُجبر استدعاء أداة لكل رسالة، فكانت «شكراً» و«مرحبا»
+    // تمرّ ببحث كامل واستدعاء نموذج إضافي. هنا نردّ فوراً بلا أداة ولا نموذج.
+    // وجود ردّ سابق من المساعد يعني أن «تمام»/«اوكي» موافقة لا مجاملة
+    const hasPriorAssistantTurn = sanitizedMessages.some(m => m.role === "assistant")
+    if (
+      lastMessage.role === "user" &&
+      !kbContext &&
+      isSmallTalk(lastMessage.content, { hasPriorAssistantTurn })
+    ) {
+      console.log(`[Chat API] Small-talk short-circuit: "${lastMessage.content.slice(0, 40)}"`)
+      const stLogId = await createPendingLog(session_id, lastMessage.content)
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(FALLBACK_SMALLTALK))
+          controller.enqueue(encoder.encode(`\n__VALID_IDS__:`))
+          controller.close()
+          if (stLogId) {
+            updateChatLog(stLogId, {
+              finalAnswer: FALLBACK_SMALLTALK,
+              responseTimeMs: Date.now() - startMs,
+              wasToolUsed: false,
+            }).catch(err => console.error("[ChatLogger]", err))
+          }
+        }
+      })
+      return new Response(stream, {
+        headers: {
+          ...securityHeaders,
+          "Content-Type": "text/plain; charset=utf-8",
+          "X-Chat-Log-Id": stLogId || "",
+        }
+      })
+    }
+
     if (lastMessage.role === "user" && !kbContext) {
       const scope = classifyScope(lastMessage.content)
       if (!scope.inScope) {
@@ -411,6 +474,15 @@ export async function POST(request: Request) {
       }
     }
 
+    // ===== من هنا فصاعداً نحتاج OpenAI فعلاً =====
+    // (كل مسارات القصر أعلاه رجعت بالفعل إن أصابت — فلا تعتمد على المفتاح)
+    const openaiApiKey = process.env.OPENAI_API_KEY
+    if (!openaiApiKey) {
+      throw new Error("OPENAI_API_KEY not found in environment")
+    }
+    const model = getOpenAIModel()
+    const openai = new OpenAI({ apiKey: openaiApiKey })
+
     // حقن System Prompt الثابت في بداية المحادثة
     // ✅ نستخدم sanitizedMessages (الرسائل المنظفة) وليس messages الخام
     const systemPrompt = getSiteSystemPrompt()
@@ -434,6 +506,12 @@ export async function POST(request: Request) {
 
       try {
         // الخطوة 1: حل جميع tool calls (بدون stream)
+        // ⚠️ نداءات الاختيار تتلقّى الموجّه **الكامل** عمداً.
+        // جُرّب إرسال الجوهري وحده (توفير ~2,228 رمزاً/نداء) وقيس على 30 سؤالاً
+        // حقيقياً بـ temperature 0: نفس الأداة في 86.7% فقط، ونفس الأداة
+        // **والمعاملات** في 56.7% فقط. أي أن أقسام العرض والأمثلة تؤثّر فعلاً على
+        // صياغة الاستعلام من اللهجة العامّية — فالفصل ليس محايداً ورُفض.
+        // البرهان قابل لإعادة التشغيل: npm run eval:tools
         const toolResult = await resolveToolCalls(
           openai,
           model,
@@ -450,13 +528,23 @@ export async function POST(request: Request) {
           ? toolResult.resolvedMessages  // بعد tool calls
           : messagesWithSystem           // سؤال بسيط بدون أدوات
 
-        const finalStream = await openai.chat.completions.create({
+        // stream_options.include_usage مدعوم وقت التشغيل لكنه غائب عن أنواع
+        // إصدار SDK المثبّت (نفس حالة parallel_tool_calls في function-calling-handler)،
+        // لذا نبني المعاملات ككائن مُحوَّل النوع بدل تعطيل الفحص على الاستدعاء كلّه.
+        const finalParams = {
           model,
           messages: streamMessages,
           temperature: 0.5,
-          max_tokens: 500,
-          stream: true
-        })
+          max_tokens: FINAL_ANSWER_MAX_TOKENS,
+          stream: true,
+          // بدون هذا الطلب الصريح لا يُرسل OpenAI usage في وضع البثّ إطلاقاً،
+          // فتستحيل معرفة كلفة السؤال الواحد (عمى اقتصادي كامل).
+          stream_options: { include_usage: true },
+        } as unknown as Parameters<typeof openai.chat.completions.create>[0]
+
+        const finalStream = (await openai.chat.completions.create(
+          finalParams
+        )) as unknown as AsyncIterable<any>
 
         // استخرج validIds من tool results مسبقاً (لا يحتاج انتظار الـ stream)
         const validIds = toolResult.needsFinalCall
@@ -488,8 +576,20 @@ export async function POST(request: Request) {
           async start(controller) {
             const enc = new TextEncoder()
             let buffer = ""
+            // نبدأ من استهلاك نداءات اختيار الأداة (كانت غير محسوبة إطلاقاً)،
+            // ثم نضيف استهلاك نداء الجواب المتدفّق ⇒ الكلفة الحقيقية للسؤال كاملاً.
+            let promptTokens = toolResult.usage?.promptTokens ?? 0
+            let completionTokens = toolResult.usage?.completionTokens ?? 0
+            let cachedTokens = toolResult.usage?.cachedTokens ?? 0
             try {
               for await (const chunk of finalStream) {
+                // الجزء الأخير يحمل usage (بفضل stream_options.include_usage)
+                const u = (chunk as any).usage
+                if (u) {
+                  promptTokens += u.prompt_tokens ?? 0
+                  completionTokens += u.completion_tokens ?? 0
+                  cachedTokens += u.prompt_tokens_details?.cached_tokens ?? 0
+                }
                 const content = chunk.choices[0]?.delta?.content || ""
                 if (content) {
                   buffer += content
@@ -513,6 +613,9 @@ export async function POST(request: Request) {
                   responseTimeMs: Date.now() - startMs,
                   modelName: model,
                   wasToolUsed: toolResult.needsFinalCall,
+                  promptTokens,
+                  completionTokens,
+                  cachedTokens,
                 }).catch(err => console.error("[ChatLogger]", err))
               }
             }

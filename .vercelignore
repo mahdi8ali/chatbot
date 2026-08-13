@@ -22,6 +22,3 @@ coverage/
 # Build (Next.js will rebuild)
 .next/
 out/
-
-# لا تتجاهل public/ - نحتاج widget.js!
-# !public/

@@ -1,12 +1,21 @@
 import { saveFeedback } from "@/lib/server/chat-logger"
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-}
+import { corsHeaders, isAllowedOrigin, forbiddenOrigin } from "@/lib/server/cors"
+import { applyRateLimit, createRateLimitResponse } from "@/lib/server/rate-limiter"
 
 export async function POST(request: Request) {
+  const origin = request.headers.get("origin")
+  if (origin && !isAllowedOrigin(origin)) return forbiddenOrigin(origin)
+  const CORS_HEADERS = corsHeaders(origin)
+
+  // حدّ معدّل مستقلّ: النقطة بلا مصادقة وchat_log_id متسلسل، فبلا حدّ يمكن
+  // إغراق chat_feedback بتقييمات مزوّرة وإفساد لوحة التحليلات.
+  const rl = applyRateLimit(request, {
+    maxRequests: 30,
+    windowMs: 60 * 1000,
+    blockDurationMs: 5 * 60 * 1000,
+  })
+  if (!rl.allowed) return createRateLimitResponse(rl.retryAfter!)
+
   try {
     const body = await request.json()
     const { chat_log_id, session_id, rating, feedback_note } = body
@@ -33,13 +42,8 @@ export async function POST(request: Request) {
   }
 }
 
-export async function OPTIONS() {
-  return new Response(null, {
-    status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    },
-  })
+export async function OPTIONS(request: Request) {
+  const origin = request.headers.get("origin")
+  if (origin && !isAllowedOrigin(origin)) return forbiddenOrigin(origin)
+  return new Response(null, { status: 204, headers: corsHeaders(origin) })
 }

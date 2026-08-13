@@ -222,14 +222,35 @@ export function containsMaliciousContent(text: string): boolean {
 }
 
 /**
- * تنظيف Messages للمحادثة
+ * تنظيف محتوى رسالة مساعد قبل إعادة إرسالها ضمن تاريخ المحادثة.
+ *
+ * ⚠️ لا يُخفي المعلومات الشخصية ولا يقصّ الطول — وهذا مقصود:
+ * الرسالة صادرة من البوت نفسه ومصدرها قاعدة بيانات العتبة، لا مُدخل مستخدم.
+ * كان تطبيق maskPersonalInfo عليها يحوّل أرقام الهواتف التي أعطاها البوت للتوّ
+ * إلى [PHONE] في الدورة التالية، فيفقد النموذج سياقه ويقول «غير متوفّر» أو
+ * يخترع رقماً. وكان القصّ عند 1000 محرف يبتر ردود القوائم في التاريخ.
+ * يبقى تجريد HTML قائماً كدفاع في العمق.
+ */
+function sanitizeAssistantMessage(content: string): string {
+  if (!content || typeof content !== "string") return content
+  return stripHTMLTags(content)
+}
+
+/**
+ * تنظيف Messages للمحادثة — **حسب الدور**.
+ *
+ * رسائل المستخدم: تنظيف كامل (HTML + أحرف خطرة + إخفاء PII + سقف طول).
+ * رسائل المساعد/النظام: تجريد HTML فقط (انظر sanitizeAssistantMessage).
  */
 export function sanitizeMessages(
   messages: Array<{ role: string; content: string }>
 ): Array<{ role: string; content: string }> {
   return messages.map(msg => ({
     role: msg.role,
-    content: sanitizeUserInput(msg.content)
+    content:
+      msg.role === "user"
+        ? sanitizeUserInput(msg.content)
+        : sanitizeAssistantMessage(msg.content)
   }))
 }
 
