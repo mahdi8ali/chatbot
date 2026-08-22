@@ -239,6 +239,13 @@ export default function ChatStyles() {
       .gm-location-btn.granted { background: #eef3d9; border-color: #b1bd52; color: #6b7a1f; }
       .gm-location-btn.requesting { cursor: wait; opacity: 0.6; }
       .gm-location-btn.denied { border-color: #e8bdbd; color: #b3554f; }
+      .gm-capabilities-wrap { position: relative; flex-shrink: 0; }
+      .gm-capabilities-btn { width: 34px; height: 34px; border-radius: 10px; border: 1px solid #dde3ea; background: transparent; color: #6e757c; font-size: 15px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.15s, border-color 0.15s, color 0.15s; }
+      .gm-capabilities-btn:hover, .gm-capabilities-btn.open { background: #eef3d9; border-color: #b1bd52; color: #6b7a1f; }
+      .gm-capabilities-menu { position: absolute; bottom: calc(100% + 8px); right: 0; width: 240px; max-height: 320px; overflow-y: auto; background: #fff; border: 1px solid #dde3ea; border-radius: 14px; box-shadow: 0 4px 20px rgba(0,0,0,0.12); padding: 6px; z-index: 20; display: flex; flex-direction: column; gap: 2px; }
+      .gm-capabilities-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: right; background: transparent; border: none; border-radius: 8px; padding: 9px 10px; font-size: 14px; color: #1f1f1f; cursor: pointer; font-family: inherit; }
+      .gm-capabilities-item:hover { background: #f1f3f4; }
+      .gm-capabilities-item-emoji { font-size: 16px; flex-shrink: 0; }
       .gm-hint { text-align: center; font-size: 12px; color: #6e757c; margin-top: 9px; }
       .gm-dark-btn { width: 34px; height: 34px; border-radius: 50%; border: 1px solid #dadce0; background: transparent; color: #5f6368; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s, border-color 0.15s, color 0.15s; }
       .gm-dark-btn:hover { background: #f1f3f4; border-color: #bdc1c6; }
@@ -276,6 +283,11 @@ export default function ChatStyles() {
       .gm-root.dark .gm-location-btn:hover:not(:disabled) { background: #2d2e30; border-color: #5f6368; }
       .gm-root.dark .gm-location-btn.granted { background: #2d331a; border-color: #b1bd52; color: #c4d16a; }
       .gm-root.dark .gm-location-btn.denied { border-color: #5f3b3b; color: #d98f8f; }
+      .gm-root.dark .gm-capabilities-btn { border-color: #3c3f43; color: #9aa0a6; }
+      .gm-root.dark .gm-capabilities-btn:hover, .gm-root.dark .gm-capabilities-btn.open { background: #2d331a; border-color: #b1bd52; color: #c4d16a; }
+      .gm-root.dark .gm-capabilities-menu { background: #1e1f20; border-color: #3c3f43; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+      .gm-root.dark .gm-capabilities-item { color: #e3e3e3; }
+      .gm-root.dark .gm-capabilities-item:hover { background: #2d2e30; }
       .gm-root.dark .gm-sources-sep { background: #3c3f43; }
       .gm-root.dark .gm-source-card { background: #1e1f20; border-color: #3c3f43; color: #bdc1c6; }
       .gm-root.dark .gm-source-card:hover { background: #2d2e30; border-color: #5f6368; }

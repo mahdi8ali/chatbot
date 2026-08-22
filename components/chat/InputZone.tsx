@@ -1,6 +1,26 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import type { LocationStatus } from "./useChat"
+
+/**
+ * قائمة الخدمات — نقاط انطلاق حقيقية فقط (لا أدوات متابعة تحتاج سياقاً
+ * سابقاً كـ"تفاصيل خبر برقم" أو "صور مشروع"). مصدرها CHATBOT-CAPABILITIES.md
+ * — عند إضافة خدمة جديدة هناك، أضِفها هنا أيضاً يدوياً.
+ */
+const CAPABILITY_MENU = [
+  { emoji: "📰", label: "الأخبار", query: "أعطني آخر الأخبار عن " },
+  { emoji: "🏗️", label: "مشاريع العتبة", query: "ما هي مشاريع العتبة في " },
+  { emoji: "📚", label: "الإصدارات والمطبوعات", query: "هل يوجد كتاب أو مجلة عن " },
+  { emoji: "🎬", label: "مكتبة الفيديو", query: "أريد فيديو عن " },
+  { emoji: "📍", label: "أماكن في كربلاء", query: "أقرب فندق أو حسينية إلى الحرم" },
+  { emoji: "🕌", label: "خطب الجمعة", query: "ما آخر خطبة جمعة لديكم؟" },
+  { emoji: "🔴", label: "البثّ المباشر", query: "أريد مشاهدة البث المباشر الآن" },
+  { emoji: "🔎", label: "سجلّ المفقودات", query: "هل يوجد مستمسك مسجَّل باسم " },
+  { emoji: "☎️", label: "أرقام التواصل", query: "أعطني رقم هاتف قسم " },
+  { emoji: "📱", label: "التواصل الاجتماعي", query: "ما حساباتكم على مواقع التواصل الاجتماعي؟" },
+  { emoji: "🕰️", label: "أوقات الصلاة", query: "متى أذان المغرب اليوم؟" },
+  { emoji: "📊", label: "الإحصاءات والتحليلات", query: "كم خبراً نُشر عن " },
+]
 
 const ALL_SUGGESTIONS = [
   // الأماكن
@@ -82,11 +102,31 @@ export default function InputZone({
   locationStatus, onRequestLocation
 }: InputZoneProps) {
   const [suggestions, setSuggestions] = useState(() => pickRandom(ALL_SUGGESTIONS, 6))
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // shuffle on every new chat session (when messages cleared)
   useEffect(() => {
     if (!hasMessages) setSuggestions(pickRandom(ALL_SUGGESTIONS, 6))
   }, [hasMessages])
+
+  // إغلاق قائمة الخدمات بالضغط خارجها أو بـEsc
+  useEffect(() => {
+    if (!menuOpen) return
+    function onOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+    }
+    function onEsc(e: KeyboardEvent) {
+      if (e.key === "Escape") setMenuOpen(false)
+    }
+    document.addEventListener("mousedown", onOutside)
+    document.addEventListener("keydown", onEsc)
+    return () => {
+      document.removeEventListener("mousedown", onOutside)
+      document.removeEventListener("keydown", onEsc)
+    }
+  }, [menuOpen])
 
   return (
     <div className={`gm-input-zone${!hasMessages ? " centered" : ""}`}>
@@ -102,6 +142,45 @@ export default function InputZone({
         </div>
       )}
       <div className="gm-input-box">
+        <div className="gm-capabilities-wrap" ref={menuRef}>
+          <button
+            type="button"
+            className={`gm-capabilities-btn${menuOpen ? " open" : ""}`}
+            onClick={() => setMenuOpen(v => !v)}
+            title="ماذا يمكنني مساعدتك به؟"
+            aria-label="عرض قائمة الخدمات المتاحة"
+            aria-expanded={menuOpen}
+          >
+            /
+          </button>
+          {menuOpen && (
+            <div className="gm-capabilities-menu" role="menu">
+              {CAPABILITY_MENU.map((item, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  role="menuitem"
+                  className="gm-capabilities-item"
+                  onClick={() => {
+                    setInput(item.query)
+                    setMenuOpen(false)
+                    requestAnimationFrame(() => {
+                      const el = textareaRef.current
+                      if (!el) return
+                      el.focus()
+                      el.setSelectionRange(el.value.length, el.value.length)
+                      el.style.height = "auto"
+                      el.style.height = Math.min(el.scrollHeight, 130) + "px"
+                    })
+                  }}
+                >
+                  <span className="gm-capabilities-item-emoji">{item.emoji}</span>
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         {(() => {
           const loc = locationButtonProps(locationStatus)
           return (
@@ -118,6 +197,7 @@ export default function InputZone({
           )
         })()}
         <textarea
+          ref={textareaRef}
           className="gm-textarea"
           value={input}
           onChange={e => {
