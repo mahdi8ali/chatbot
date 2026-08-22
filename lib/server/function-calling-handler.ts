@@ -16,11 +16,14 @@ import {
   type AllowedToolName
 } from "./site-tools-definitions"
 import { executeToolByName, type APICallResult } from "./site-api-service"
-import { searchProjectsDB, getProjectDetails, getProjectImage, getProjectImages } from "./projects-db-service"
+import { searchProjectsDB, getProjectDetails, getProjectImage, getProjectImages, getProjectSections } from "./projects-db-service"
 import { getNewsImages } from "./news-service"
 import { countMentions, mentionsTimeline, topTopics, countNews } from "./analytics-service"
 import { searchPublications, getPublicationCategories } from "./publications-service"
 import { getSocialMediaLinks } from "./social-media-service"
+import { searchLostItems } from "./lost-items-service"
+import { getLiveStreams } from "./live-streams-service"
+import { searchFridaySermons } from "./friday-sermons-service"
 import { getFallbackResponse } from "./system-prompts"
 import {
   isEmptyAPIResponse,
@@ -76,6 +79,9 @@ function cleanProject(project: any, detailed: boolean = false): any {
     // حقل المصدر لمعرفة أصل النتيجة
     ...(project.source_label ? { source_label: project.source_label } : {}),
     ...(project.length ? { length: project.length } : {}),
+    // عدد المشاهدات (فيديو) — أُضيف لدعم "أكثر فيديو مشاهدة" (sort_by=views)؛
+    // كان يُحذَف بصمت هنا رغم وجوده في mapVideoToItem، فيغيب عن النموذج تماماً.
+    ...(typeof project.views === "number" ? { views: project.views } : {}),
   }
 }
 
@@ -176,6 +182,11 @@ const DIRECT_TOOL_HANDLERS: Record<string, DirectToolHandler> = {
       : JSON.stringify({ success: true, project: r.data })
   },
 
+  async get_project_sections() {
+    const r = await getProjectSections()
+    return JSON.stringify(r.success ? r.data : { success: false, message: r.error })
+  },
+
   async get_project_image(args) {
     const r = await getProjectImage(Number(args.project_id))
     return !r.success || !r.data
@@ -263,6 +274,33 @@ const DIRECT_TOOL_HANDLERS: Record<string, DirectToolHandler> = {
   // ── روابط التواصل الاجتماعي ──────────────────────────────────────────────
   async get_social_media_links() {
     const r = await getSocialMediaLinks()
+    return JSON.stringify(r.success ? r.data : { success: false, message: r.error })
+  },
+
+  // ── سجلّ المفقودات (اللقطة) ───────────────────────────────────────────────
+  async search_lost_items(args) {
+    const r = await searchLostItems({
+      query: args.query,
+      itemType: args.item_type,
+      limit: args.limit,
+    })
+    return JSON.stringify(r.success ? r.data : { success: false, message: r.error })
+  },
+
+  // ── البثّ المباشر ─────────────────────────────────────────────────────────
+  async get_live_streams() {
+    const r = await getLiveStreams()
+    return JSON.stringify(r.success ? r.data : { success: false, message: r.error })
+  },
+
+  // ── أرشيف خطب الجمعة ──────────────────────────────────────────────────────
+  async search_friday_sermons(args) {
+    const r = await searchFridaySermons({
+      query: args.query,
+      preacher: args.preacher,
+      sortBy: args.sort_by,
+      limit: args.limit,
+    })
     return JSON.stringify(r.success ? r.data : { success: false, message: r.error })
   },
 }

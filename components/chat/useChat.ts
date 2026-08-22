@@ -4,6 +4,8 @@ import { useRef, useState } from "react"
 import type { Message } from "./types"
 import { META_LINE, clientStripInvalidLinks } from "./linkValidation"
 
+export type LocationStatus = "idle" | "requesting" | "granted" | "denied" | "unsupported"
+
 export function useChat(apiEndpoint: string) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
@@ -13,6 +15,32 @@ export function useChat(apiEndpoint: string) {
   const sessionIdRef = useRef<string>(
     typeof crypto !== "undefined" ? crypto.randomUUID() : Math.random().toString(36)
   )
+
+  // ── موقع الزائر (اختياري، بمبادرته فقط) ──────────────────────────────────
+  // يُطلب فقط عند ضغط الزائر زرّ "شارك موقعك" — المتصفح نفسه يعرض نافذة إذن
+  // رسمية لا يمكن تجاوزها. الإحداثيات تبقى في الذاكرة (state) طوال الجلسة
+  // فقط، تُرسَل مع كل رسالة لاحقة إن وُجدت، ولا تُخزَّن ولا تُستخدم لأي غرض
+  // غير حساب القرب الجغرافي في search_places (انظر route.ts وsystem-prompts.ts).
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
+  const [locationStatus, setLocationStatus] = useState<LocationStatus>("idle")
+
+  const requestLocation = () => {
+    if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
+      setLocationStatus("unsupported")
+      return
+    }
+    setLocationStatus("requesting")
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        setLocationStatus("granted")
+      },
+      () => {
+        setLocationStatus("denied")
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 5 * 60 * 1000 }
+    )
+  }
 
   const sendMessage = async (text?: string) => {
     const messageText = (text || input).trim()
@@ -41,6 +69,7 @@ export function useChat(apiEndpoint: string) {
           max_tokens: 2000,
           use_tools: true,
           session_id: sessionIdRef.current,
+          ...(userLocation ? { user_location: userLocation } : {}),
         })
       })
 
@@ -124,5 +153,7 @@ export function useChat(apiEndpoint: string) {
     clearChat,
     stopGeneration,
     sessionId: sessionIdRef.current,
+    locationStatus,
+    requestLocation,
   }
 }

@@ -72,6 +72,9 @@ const BASELINE: Case[] = [
   { id: "b-pub-search",   category: "أساسي", question: "هل يوجد كتاب عن سيرة أبي الفضل العباس؟", acceptTools: ["search_publications"] },
   { id: "b-pub-cats",     category: "أساسي", question: "ما هي سلاسل إصداراتكم المتاحة؟", acceptTools: ["get_publication_categories"] },
   { id: "b-social",       category: "أساسي", question: "ما حسابكم على انستغرام؟", acceptTools: ["get_social_media_links"] },
+  { id: "b-lost",         category: "أساسي", question: "هل يوجد مستمسك مسجّل باسم أحمد كريم جبار؟", acceptTools: ["search_lost_items"] },
+  { id: "b-live",         category: "أساسي", question: "أريد مشاهدة البث المباشر من الحرم", acceptTools: ["get_live_streams"] },
+  { id: "b-sermon",       category: "أساسي", question: "ماذا قال الخطيب في آخر خطبة جمعة؟", acceptTools: ["search_friday_sermons"] },
 ]
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -116,6 +119,18 @@ const CONFUSABLE: Case[] = [
   { id: "c-pub-2", category: "إصدارات/أخبار", question: "شنو عندكم كتب عن التراث؟", acceptTools: ["search_publications"], note: "عامية — «كتب» يجب ألّا تذهب لـ search_content" },
   { id: "c-pub-3", category: "إصدارات/أخبار", question: "أعطني آخر أخبار عن كتاب جديد أصدرته العتبة", acceptTools: ["search_content"], note: "سؤال عن خبر نشر الكتاب لا عن الكتاب نفسه — search_content صحيحة هنا" },
   { id: "c-social-1", category: "تواصل اجتماعي", question: "وين اكوكم بالفيسبوك؟", acceptTools: ["get_social_media_links"], note: "عامية عراقية لسؤال رابط الحساب" },
+
+  // مفقودات مقابل اتصال — فخّ متوقّع لأن الاثنتين قد تبدوان "خدمة زائر"
+  { id: "c-lost-1", category: "مفقودات", question: "ضاعت هويتي داخل الصحن، شلون احصل عليها؟", acceptTools: ["search_lost_items"], note: "عامية — يلزم اسم؛ الأداة نفسها تطلبه إن غاب" },
+  { id: "c-lost-2", category: "مفقودات", question: "كيف أتواصل مع إدارة العتبة بخصوص شكوى؟", acceptTools: ["search_contacts"], note: "شكوى إدارية عامة لا مفقودات — تمييز" },
+
+  // بثّ مباشر مقابل فيديو مسجَّل — فخّ متوقّع
+  { id: "c-live-1", category: "بثّ مباشر", question: "أبغى اشوف كامرة الحرم الحين لايف", acceptTools: ["get_live_streams"], note: "عامية + 'لايف' تعني بثّاً مباشراً لا فيديو مسجَّلاً" },
+  { id: "c-live-2", category: "بثّ مباشر", question: "أريد فيديو مسجَّل عن زيارة الأربعين", acceptTools: ["search_videos"], note: "فيديو مسجَّل قديم لا بثّاً مباشراً — تمييز" },
+
+  // خطب الجمعة مقابل بحث عام في الأخبار
+  { id: "c-sermon-1", category: "خطب الجمعة", question: "خطبة السيد الصافي عن الوعي الصحي", acceptTools: ["search_friday_sermons"], note: "خطبة محدَّدة بموضوع — ليست خبراً" },
+  { id: "c-sermon-2", category: "خطب الجمعة", question: "أعطني خبراً عن آخر زيارة قام بها الأمين العام", acceptTools: ["search_content"], note: "خبر عام لا خطبة جمعة — تمييز" },
 ]
 
 const ALL_CASES = [...BASELINE, ...CONFUSABLE]

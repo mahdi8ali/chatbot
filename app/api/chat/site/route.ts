@@ -197,6 +197,21 @@ interface ChatRequest {
   max_tokens?: number
   use_tools?: boolean // خيار لتفعيل/تعطيل الأدوات
   session_id?: string // معرف الجلسة لربط السجلات
+  user_location?: { lat: number; lng: number } // موقع الزائر الفعلي — بمبادرته عبر زرّ "شارك موقعك" فقط
+}
+
+/**
+ * يتحقّق من صحّة إحداثيات الموقع الواردة من الواجهة قبل الوثوق بها — القيمة
+ * تصل من طرف العميل (JS في متصفّح الزائر)، فتُعامَل كمُدخل غير موثوق تماماً
+ * مثل أي حقل آخر في الطلب، لا كبيانات داخلية.
+ */
+function validateUserLocation(loc: unknown): { lat: number; lng: number } | null {
+  if (!loc || typeof loc !== "object") return null
+  const { lat, lng } = loc as { lat?: unknown; lng?: unknown }
+  if (typeof lat !== "number" || typeof lng !== "number") return null
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null
+  return { lat, lng }
 }
 
 /**
@@ -256,9 +271,11 @@ export async function POST(request: Request) {
       temperature = 0.5,
       max_tokens = 1200,
       use_tools = true,
-      session_id
+      session_id,
+      user_location
     } = json as ChatRequest
     const startMs = Date.now()
+    const validLocation = validateUserLocation(user_location)
 
     // التحقق من وجود رسائل
     if (!messages || messages.length === 0) {
@@ -304,6 +321,17 @@ export async function POST(request: Request) {
       lastMessage.content = validation.sanitized!
     }
 
+    // ✅ يبدأ إدراج سجلّ الدردشة الآن، لا عند أول مسار قصر يحتاجه لاحقاً (كان
+    // كل مسار — المخزن المنسّق/قاعدة المعرفة/حارس النطاق/الأداة/fallback —
+    // يُنفّذ `await createPendingLog(...)` بمعزل تماماً، فيضيف رحلة DB متسلسلة
+    // كاملة أمام أول بايت من الاستجابة؛ مذكور في §4.3 كمشكلة أداء لم تُصلَح).
+    // كل المسارات تستهلك نفس session_id/lastMessage.content بالضبط (المرجع
+    // نفسه — sanitizedMessages[i] وlastMessage عنصر واحد)، فوعد واحد يُبدأ هنا
+    // يعمل بالتوازي مع matchCurated/kbSearch/classifyScope/نداءات OpenAI
+    // اللاحقة كلها؛ بحلول أي `await pendingLogPromise` لاحق يكون الإدراج
+    // الصغير قد اكتمل عملياً غالباً، فيتحوّل الانتظار هناك إلى شبه معدوم.
+    const pendingLogPromise = createPendingLog(session_id, lastMessage.content)
+
     // ملاحظة: فحص OPENAI_API_KEY أُخّر إلى ما قبل أول استعمال فعلي للنموذج.
     // مسارات القصر أدناه (المخزن المنسّق، قاعدة المعرفة، حارس النطاق) مصمّمة
     // للعمل بلا OpenAI إطلاقاً، وكان الفحص المبكّر يُفشلها بـ 500 عند غياب المفتاح.
@@ -325,7 +353,7 @@ export async function POST(request: Request) {
           ? `${curated.answer}\n\n📖 *المصدر* — 🔗 [اقرأ المزيد](${curated.url})`
           : curated.answer
 
-        const curatedLogId = await createPendingLog(session_id, lastMessage.content)
+        const curatedLogId = await pendingLogPromise
         const encoder = new TextEncoder()
         const stream = new ReadableStream({
           start(controller) {
@@ -365,7 +393,7 @@ export async function POST(request: Request) {
           // خيار قصر المسار عالي الثقة (معطّل افتراضياً) — يُرجع المتن حرفياً كنمط الإجابات المنسّقة
           if (KB_SHORT_CIRCUIT_ENABLED && kbHits[0].score >= SHORT_CIRCUIT_THRESHOLD) {
             const kbText = kbHits[0].body
-            const kbLogId = await createPendingLog(session_id, lastMessage.content)
+            const kbLogId = await pendingLogPromise
             const encoder = new TextEncoder()
             const stream = new ReadableStream({
               start(controller) {
@@ -418,7 +446,7 @@ export async function POST(request: Request) {
       isSmallTalk(lastMessage.content, { hasPriorAssistantTurn })
     ) {
       console.log(`[Chat API] Small-talk short-circuit: "${lastMessage.content.slice(0, 40)}"`)
-      const stLogId = await createPendingLog(session_id, lastMessage.content)
+      const stLogId = await pendingLogPromise
       const encoder = new TextEncoder()
       const stream = new ReadableStream({
         start(controller) {
@@ -448,7 +476,7 @@ export async function POST(request: Request) {
       if (!scope.inScope) {
         console.log(`[Chat API] Out-of-scope (${scope.category}) for: "${lastMessage.content.slice(0, 60)}"`)
 
-        const scopeLogId = await createPendingLog(session_id, lastMessage.content)
+        const scopeLogId = await pendingLogPromise
         const encoder = new TextEncoder()
         const stream = new ReadableStream({
           start(controller) {
@@ -485,7 +513,13 @@ export async function POST(request: Request) {
 
     // حقن System Prompt الثابت في بداية المحادثة
     // ✅ نستخدم sanitizedMessages (الرسائل المنظفة) وليس messages الخام
-    const systemPrompt = getSiteSystemPrompt()
+    // موقع الزائر (إن وُجد وصالحاً) يُحقَن كتعليمات إضافية خاصة بالجلسة — نفس
+    // آلية {{TODAY}} الديناميكية أصلاً، لا مسار جديد. الإحداثيات لم تُطلَب إلا
+    // بمبادرة الزائر نفسه عبر زرّ "شارك موقعك" في الواجهة (إذن متصفّح رسمي).
+    const locationInstructions = validLocation
+      ? `موقع الزائر الحالي متوفر (شاركه بنفسه عبر المتصفح بإذنه الصريح): ${validLocation.lat},${validLocation.lng}\nإن سأل عن "الأقرب مني" أو ما يعادلها (لا "الأقرب من الحرم" — تلك تبقى بإحداثيات الصحن الثابتة كالمعتاد)، استخدم هذه الإحداثيات مباشرة كقيمة near عند استدعاء search_places. لا تستخدمها لأي غرض آخر، ولا تكشف الإحداثيات الخام في ردّك — اكتفِ بعرض النتائج والمسافات المحسوبة.`
+      : undefined
+    const systemPrompt = getSiteSystemPrompt(locationInstructions)
     const messagesWithSystem: ChatCompletionMessageParam[] = [
       {
         role: "system",
@@ -571,7 +605,7 @@ export async function POST(request: Request) {
         // ✅ True streaming: أرسل chunks فوراً بدل الـ buffering
         // ألحق __VALID_IDS__ في نهاية الـ stream للـ client ليتحقق من الروابط محلياً
         const userQ = sanitizedMessages[sanitizedMessages.length - 1]?.content || ""
-        const toolStreamLogId = await createPendingLog(session_id, userQ)
+        const toolStreamLogId = await pendingLogPromise
         const readable = new ReadableStream({
           async start(controller) {
             const enc = new TextEncoder()
@@ -647,7 +681,7 @@ export async function POST(request: Request) {
     })
 
     const fbUserQ = sanitizedMessages[sanitizedMessages.length - 1]?.content || ""
-    const fallbackLogId = await createPendingLog(session_id, fbUserQ)
+    const fallbackLogId = await pendingLogPromise
     const fallbackStream = new ReadableStream({
       async start(controller) {
         let buffer = ""

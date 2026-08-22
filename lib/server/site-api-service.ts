@@ -271,7 +271,8 @@ export async function executeToolByName(
         return await searchVideos({
           query: args.query || "",
           section: args.section,
-          limit: args.limit
+          limit: args.limit,
+          sortBy: args.sort_by
         })
       case "search_places":
         return await searchPlaces({

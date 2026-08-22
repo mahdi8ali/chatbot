@@ -209,6 +209,22 @@ export const TOOL_SEARCH_PROJECTS_DB: ChatCompletionTool = {
 }
 
 /**
+ * أداة قائمة أصناف/أقسام المشاريع الرئيسية
+ */
+export const TOOL_GET_PROJECT_SECTIONS: ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "get_project_sections",
+    description: "قائمة أصناف/أقسام مشاريع العتبة العباسية المقدسة الرئيسية (طبية، تعليمية، ثقافية، تنموية، الصحن ومقترباته، خدمات عامة، تشكيلات إدارية) مع عدد المشاريع في كل صنف. استخدمها فوراً عندما يسأل المستخدم: 'ما هي أصناف/أقسام/قطاعات المشاريع؟'، 'ما هي تصنيفات مشاريع العتبة؟' — سؤال عن القائمة نفسها لا عن مشروع محدَّد. ⚠️ ليست list_news_categories — تلك للأخبار فقط، قاعدة منفصلة تماماً.",
+    parameters: {
+      type: "object",
+      properties: {},
+      required: []
+    }
+  }
+}
+
+/**
  * أداة جلب تفاصيل مشروع واحد من قاعدة المشاريع
  */
 export const TOOL_GET_PROJECT_DETAILS: ChatCompletionTool = {
@@ -297,17 +313,22 @@ export const TOOL_SEARCH_VIDEOS: ChatCompletionTool = {
   type: "function",
   function: {
     name: "search_videos",
-    description: "بحث مباشر في مكتبة فيديو شبكة الكفيل بالعنوان أو الوصف. استخدم هذه الأداة تحديداً عندما يطلب المستخدم فيديو بعنوان أو موضوع محدد: 'أريد فيديو عن محرم'، 'فيديو طوعة العصر'، 'أرني فيديوهات الأربعين'، 'فيديو خطبة'... إلخ. النتيجة تحتوي رابط mp4 مباشر للتشغيل.",
+    description: "بحث مباشر في مكتبة فيديو شبكة الكفيل بالعنوان أو الوصف. استخدم هذه الأداة تحديداً عندما يطلب المستخدم فيديو بعنوان أو موضوع محدد: 'أريد فيديو عن محرم'، 'فيديو طوعة العصر'، 'أرني فيديوهات الأربعين'، 'فيديو خطبة'... إلخ. النتيجة تحتوي رابط mp4 مباشر للتشغيل. ⚠️ إذا سأل عن 'أكثر فيديو مشاهدة' أو 'الأكثر مشاهدة' → استخدم sort_by: \"views\" (لا تعتذر بعدم التوفر، الحقل موجود).",
     parameters: {
       type: "object",
       properties: {
         query: {
           type: "string",
-          description: "كلمات البحث بالعربية — عنوان الفيديو أو موضوعه"
+          description: "كلمات البحث بالعربية — عنوان الفيديو أو موضوعه (اختياري إن حُدّد section أو كان السؤال عن الأكثر مشاهدة عموماً). ⚠️ لسؤال عن قسم/سلسلة كاملة (مثل 'كم فيديو في سلسلة X؟') لا تكرّر اسم القسم هنا — اتركه فارغاً ومرّر section فقط، وإلا سيُشترط ظهور كل كلمة حرفياً في كل فيديو فيُنقِص العدد الحقيقي."
         },
         section: {
           type: "string",
           description: "اسم قسم الفيديو للتصفية (اختياري) — مثال: أربعين، محرم، مواكب، إصدارات"
+        },
+        sort_by: {
+          type: "string",
+          description: "ترتيب النتائج: recent (افتراضي، الأحدث أولاً) أو views (الأكثر مشاهدة أولاً) — استخدم views لسؤال 'أكثر فيديو مشاهدة'.",
+          enum: ["recent", "views"]
         },
         limit: {
           type: "number",
@@ -316,7 +337,7 @@ export const TOOL_SEARCH_VIDEOS: ChatCompletionTool = {
           maximum: 10
         }
       },
-      required: ["query"]
+      required: []
     }
   }
 }
@@ -441,6 +462,89 @@ export const TOOL_GET_SOCIAL_MEDIA_LINKS: ChatCompletionTool = {
       type: "object",
       properties: {},
       required: []
+    }
+  }
+}
+
+/**
+ * أداة أرشيف خطب الجمعة
+ */
+export const TOOL_SEARCH_FRIDAY_SERMONS: ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "search_friday_sermons",
+    description: "بحث في أرشيف خطب الجمعة لخطيبَي العتبة العباسية (السيد أحمد الصافي، الشيخ عبد المهدي الكربلائي). استخدمها عندما يسأل المستخدم عن خطبة جمعة أو موضوعها: 'آخر خطبة جمعة؟'، 'ماذا قال الخطيب عن كذا؟'، 'خطبة عن الوحدة الوطنية'، 'خطب السيد الصافي'، 'أشهر خطبة'. ⚠️ الأرشيف **متوقّف منذ فبراير 2020** ولا يحوي خطباً أحدث — لا تصف أيّ نتيجة بـ'الأخيرة' أو 'هذا الأسبوع' دون ذكر تاريخها الحقيقي (حقل date) صراحةً، فقد يظنّها المستخدم حديثة.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "كلمات البحث بالعربية — عنوان الخطبة أو موضوعها (اختياري؛ إن غاب تُعاد أحدث الخطب المتوفرة في الأرشيف، أو الأكثر مشاهدة إن حُدّد sort_by=views)"
+        },
+        preacher: {
+          type: "string",
+          description: "اسم الخطيب للتصفية (اختياري) — مثال: 'الصافي' أو 'الكربلائي'"
+        },
+        sort_by: {
+          type: "string",
+          description: "ترتيب النتائج: recent (افتراضي، الأحدث أولاً) أو views (الأكثر مشاهدة أولاً) أو oldest (الأقدم أولاً) — استخدم views لسؤال 'أشهر خطبة'، وoldest لسؤال 'أول خطبة' أو 'أقدم خطبة'.",
+          enum: ["recent", "views", "oldest"]
+        },
+        limit: {
+          type: "number",
+          description: "عدد النتائج (افتراضي: 5، أقصى: 10)",
+          minimum: 1,
+          maximum: 10
+        }
+      },
+      required: []
+    }
+  }
+}
+
+/**
+ * أداة روابط البثّ المباشر
+ */
+export const TOOL_GET_LIVE_STREAMS: ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "get_live_streams",
+    description: "روابط بثّ مباشر (كاميرات) حقيقية من داخل العتبة العباسية المقدسة (الضريح الشريف، الصحن، مدخل الحرم...). استخدمها فوراً عندما يسأل المستخدم: 'أريد مشاهدة البث المباشر'، 'أرني كاميرا الحرم الآن'، 'هل يوجد بثّ مباشر؟'. كل نتيجة تحمل is_active — استخدم الروابط النشطة (is_active: true) فقط كإجابة أساسية؛ إن كانت كلها غير نشطة، أخبر المستخدم بصراحة أن البثّ متوقّف مؤقتاً حالياً بدل تقديم رابط قد لا يعمل.",
+    parameters: {
+      type: "object",
+      properties: {},
+      required: []
+    }
+  }
+}
+
+/**
+ * أداة سجلّ المفقودات (اللقطة)
+ */
+export const TOOL_SEARCH_LOST_ITEMS: ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "search_lost_items",
+    description: "بحث في سجلّ المفقودات (اللقطة) في العتبة العباسية المقدسة — مستمسكات وهويات (بطاقة وطنية، جواز سفر، هوية أحوال...) عُثر عليها وسُجّلت باسم صاحبها. استخدمها فوراً عندما يسأل المستخدم: 'هل يوجد مستمسك باسمي؟'، 'فقدت هويتي هل وجدتوها؟'، 'هل توجد لقطة باسم فلان؟'. ⚠️ يلزم اسم المستخدم الثلاثي/الرباعي — إن لم يذكره المستخدم اطلبه أولاً قبل استدعاء الأداة، فهي ترفض العمل بلا اسم (خصوصية).",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "الاسم الثلاثي أو الرباعي (أو جزء منه) للبحث عنه في سجلّ المفقودات — إلزامي دائماً"
+        },
+        item_type: {
+          type: "string",
+          description: "نوع المستمسك للتضييق (اختياري) — نصّ حرّ مثل 'جواز سفر' أو 'بطاقة وطنية'"
+        },
+        limit: {
+          type: "number",
+          description: "عدد النتائج (افتراضي: 8، أقصى: 15)",
+          minimum: 1,
+          maximum: 15
+        }
+      },
+      required: ["query"]
     }
   }
 }
@@ -639,6 +743,7 @@ export const ALL_SITE_TOOLS: ChatCompletionTool[] = [
   TOOL_GET_STATISTICS,
   TOOL_SEARCH_CONTACTS,
   TOOL_SEARCH_PROJECTS_DB,
+  TOOL_GET_PROJECT_SECTIONS,
   TOOL_GET_PROJECT_DETAILS,
   TOOL_GET_PROJECT_IMAGE,
   TOOL_GET_PROJECT_IMAGES,
@@ -653,7 +758,10 @@ export const ALL_SITE_TOOLS: ChatCompletionTool[] = [
   TOOL_COUNT_NEWS,
   TOOL_SEARCH_PUBLICATIONS,
   TOOL_GET_PUBLICATION_CATEGORIES,
-  TOOL_GET_SOCIAL_MEDIA_LINKS
+  TOOL_GET_SOCIAL_MEDIA_LINKS,
+  TOOL_SEARCH_LOST_ITEMS,
+  TOOL_GET_LIVE_STREAMS,
+  TOOL_SEARCH_FRIDAY_SERMONS
 ]
 
 /**
@@ -667,6 +775,7 @@ export const ALLOWED_TOOL_NAMES = [
   "get_content_statistics",
   "search_contacts",
   "search_projects_db",
+  "get_project_sections",
   "get_project_details",
   "get_project_image",
   "get_project_images",
@@ -681,7 +790,10 @@ export const ALLOWED_TOOL_NAMES = [
   "count_news",
   "search_publications",
   "get_publication_categories",
-  "get_social_media_links"
+  "get_social_media_links",
+  "search_lost_items",
+  "get_live_streams",
+  "search_friday_sermons"
 ] as const
 
 export type AllowedToolName = (typeof ALLOWED_TOOL_NAMES)[number]

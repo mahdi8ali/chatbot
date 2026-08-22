@@ -65,6 +65,7 @@ interface PropertyRow extends RowDataPacket {
 interface SectionRow extends RowDataPacket {
   id: number
   name: string
+  parent_section_id: number | null
 }
 
 /**
@@ -83,10 +84,124 @@ async function getSections(): Promise<SectionRow[]> {
   const now = Date.now()
   if (sectionsCache && now - sectionsCacheTime < CACHE_DURATION) return sectionsCache
   const db = getProjectsPool()
-  const [rows] = await db.execute<SectionRow[]>("SELECT id, name FROM sections ORDER BY id")
+  const [rows] = await db.execute<SectionRow[]>("SELECT id, name, parent_section_id FROM sections ORDER BY id")
   sectionsCache = rows
   sectionsCacheTime = now
   return rows
+}
+
+/**
+ * يوسّع قائمة أصناف مطابقة بالاسم لتشمل **كل ذرّيتها** (أبناء، أحفاد...) —
+ * بلا هذا التوسيع، فلتر section في searchProjectsDB كان يطابق فقط الأصناف
+ * التي يحوي *اسمها هي نفسها* الكلمة المطلوبة، فيفوّت مشاريع مصنَّفة فعلياً
+ * ضمن الشجرة نفسها بأصناف فرعية أسماؤها مختلفة كلياً (مثل "مراكز ومؤسسات"،
+ * "مؤتمرات" تحت "المشاريع الثقافية" — لا تحوي كلمة "ثقافي" إطلاقاً). فحص حيّ
+ * حقيقي: "ثقافي" طابقت صنفين فقط (من 9 في الشجرة الحقيقية) فأنقصت 156 نتيجة
+ * محتملة إلى 30 — نفس السبب الجذري المُصلَح للعدّ في getProjectSections()،
+ * هنا يُطبَّق على نتائج البحث والتصفّح الفعلية لا العدّ فقط.
+ */
+function expandWithDescendants(matchedIds: number[], allSections: SectionRow[]): number[] {
+  const children = new Map<number, number[]>()
+  for (const s of allSections) {
+    if (s.parent_section_id == null) continue
+    if (!children.has(s.parent_section_id)) children.set(s.parent_section_id, [])
+    children.get(s.parent_section_id)!.push(s.id)
+  }
+  const result = new Set<number>()
+  const queue = [...matchedIds]
+  while (queue.length > 0) {
+    const id = queue.shift()!
+    if (result.has(id)) continue
+    result.add(id)
+    for (const childId of children.get(id) || []) queue.push(childId)
+  }
+  return Array.from(result)
+}
+
+/**
+ * قائمة أصناف/أقسام المشاريع الرئيسية — لم تكن مُعرَّضة كأداة إطلاقاً رغم
+ * وجود جدول `sections` واستعماله داخلياً فقط لفلترة searchProjectsDB (نفس
+ * فجوة get_video_sections/get_publication_categories قبل بنائهما). فحص حيّ
+ * حقيقي: `sections` هرمي (`parent_section_id`) — 7 أصناف رئيسية فقط
+ * (parent_section_id IS NULL) مرتَّبة بعمود `order`، تطابق حرفياً ما توقّعه
+ * المالك: المشاريع الثقافية، التعليمية، الصحن ومقترباته، الطبية، التنموية،
+ * خدمات عامة، تشكيلات إدارية. بقية الصفوف (33 إجمالاً) أصناف فرعية أعمق —
+ * غير معروضة هنا عمداً (نطاق أضيق يطابق توقّع السؤال، لا تعقيد شجرة كامل).
+ *
+ * ⚠️ **العدّ يجب أن يشمل الأصناف الفرعية كلّها، لا id الرئيسي وحده** — فحص
+ * حيّ كشف أن أغلب الربط الفعلي (`projects.section_id` و`project_section`
+ * معاً) يشير إلى أصناف **فرعية** (مثل "المجلات الثقافية"، "الأقسام" تحت
+ * "تشكيلات إدارية") لا للصنف الرئيسي مباشرة؛ عدّ id الرئيسي وحده أعاد
+ * أصفاراً كاذبة لخمسة من سبعة أصناف (فحصت: 316 من 358 مشروعاً `section_id=0`
+ * فعلياً — عمود غير مُعتمَد، والربط الحقيقي عبر `project_section` بأصناف
+ * فرعية أساساً، 422 رابطاً موزَّعة عبر الشجرة كلها). الحلّ: بناء إغلاق شجرة
+ * كل صنف رئيسي (نفسه + كل ذرّياته مهما عمق التداخل) في JS، ثم عدّ مشاريع
+ * فريدة (Set) مرتبطة بأي id ضمن تلك الشجرة — لا مجموع بسيط لكل صنف فرعي
+ * وحده (قد يُكرَّر نفس المشروع تحت أكثر من صنف فرعي واحد ضمن نفس الشجرة).
+ */
+export async function getProjectSections(): Promise<{ success: boolean; data?: any; error?: string }> {
+  try {
+    const db = getProjectsPool()
+
+    const [sectionRows] = await db.execute<RowDataPacket[]>(
+      `SELECT id, name, parent_section_id, \`order\` FROM sections`
+    )
+    const allSections = sectionRows as any[]
+
+    // ⚠️ بلا فلتر deleted_at هنا عمداً — فحص حيّ قارن عدّي بعدد "المشاريع
+    // الثقافية" المعروض فعلياً على الموقع (155): بفلتر deleted_at IS NULL
+    // كان العدّ 141 (فرقٌ حقيقي لا تقريبي)، وبإزالته صار 156 — يطابق تقريباً
+    // (فرق 1، متوقَّع بفارق توقيت تحديث بسيط لا خطأ منطقي). الخلاصة: العدّاد
+    // المعروض على الموقع نفسه **لا يُقصي المشاريع المحذوفة ناعماً** من عدّه —
+    // فيُطابَق هنا لأمانة الرقم أمام الزائر، ولو خالف نظافة البيانات منطقياً.
+    const [linkRows] = await db.execute<RowDataPacket[]>(`
+      SELECT p.section_id AS sid, p.id AS pid
+      FROM projects p
+      WHERE p.section_id IS NOT NULL AND p.section_id != 0
+      UNION
+      SELECT ps.section_id AS sid, ps.project_id AS pid
+      FROM project_section ps
+    `)
+    const links = linkRows as any[]
+
+    // أعلى جدّ (الصنف الرئيسي) لأي معرّف صنف — يمشي عبر parent_section_id حتى NULL
+    const byId = new Map<number, any>(allSections.map(s => [s.id, s]))
+    const topAncestorCache = new Map<number, number | null>()
+    function topAncestorOf(sectionId: number): number | null {
+      if (topAncestorCache.has(sectionId)) return topAncestorCache.get(sectionId)!
+      let cur = byId.get(sectionId)
+      let guard = 0 // حارس ضدّ دورة بيانات خاطئة (parent_section_id تدور على نفسها)
+      while (cur && cur.parent_section_id != null && guard++ < 50) {
+        cur = byId.get(cur.parent_section_id)
+      }
+      const result = cur ? cur.id : null
+      topAncestorCache.set(sectionId, result)
+      return result
+    }
+
+    const projectIdsByTopSection = new Map<number, Set<number>>()
+    for (const { sid, pid } of links) {
+      const top = topAncestorOf(sid)
+      if (top == null) continue
+      if (!projectIdsByTopSection.has(top)) projectIdsByTopSection.set(top, new Set())
+      projectIdsByTopSection.get(top)!.add(pid)
+    }
+
+    const topSections = allSections
+      .filter(s => s.parent_section_id == null)
+      .sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || a.id - b.id)
+
+    const sections = topSections.map(s => ({
+      id: s.id,
+      name: s.name,
+      count: projectIdsByTopSection.get(s.id)?.size ?? 0,
+    }))
+
+    return { success: true, data: { sections, total: sections.length } }
+  } catch (error: any) {
+    console.error("[DB Error - getProjectSections]:", error?.message)
+    return { success: false, error: "تعذّر جلب أصناف المشاريع" }
+  }
 }
 
 // ─── دالة مساعدة: مقتطف نص ────────────────────────────────────────────────
@@ -188,15 +303,18 @@ export async function searchProjectsDB(params: {
     const queryNorm = normalize(params.query)
     const queryWords = queryNorm.split(/\s+/).filter(w => w.length > 1)
 
-    // بناء فلتر القسم إذا طُلب
+    // بناء فلتر القسم إذا طُلب — يُوسَّع دائماً لكل ذرّية الصنف المطابق (انظر
+    // شرح expandWithDescendants) كي يشمل مشاريع مصنَّفة بأصناف فرعية أسماؤها
+    // لا تحوي كلمة الاستعلام إطلاقاً.
     let sectionFilter = ""
     const sectionParams: any[] = []
     if (params.section) {
       const sectionNorm = normalize(params.section)
       const matched = sections.filter(s => normalize(s.name).includes(sectionNorm))
       if (matched.length > 0) {
-        sectionFilter = `AND (p.section_id IN (${matched.map(() => "?").join(",")}) OR ps.section_id IN (${matched.map(() => "?").join(",")}))`
-        sectionParams.push(...matched.map(s => s.id), ...matched.map(s => s.id))
+        const expandedIds = expandWithDescendants(matched.map(s => s.id), sections)
+        sectionFilter = `AND (p.section_id IN (${expandedIds.map(() => "?").join(",")}) OR ps.section_id IN (${expandedIds.map(() => "?").join(",")}))`
+        sectionParams.push(...expandedIds, ...expandedIds)
       }
     }
 

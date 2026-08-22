@@ -12,7 +12,10 @@ export default function ChatWidget({
   apiEndpoint = "/api/chat/site",
   onClose
 }: ChatWidgetProps) {
-  const { messages, input, setInput, isLoading, isStreaming, sendMessage, clearChat, stopGeneration, sessionId } = useChat(apiEndpoint)
+  const {
+    messages, input, setInput, isLoading, isStreaming, sendMessage, clearChat, stopGeneration, sessionId,
+    locationStatus, requestLocation
+  } = useChat(apiEndpoint)
   const [darkMode, setDarkMode] = useState(false)
 
   // Loading phase animation
@@ -81,6 +84,8 @@ export default function ChatWidget({
             onStop={stopGeneration}
             welcomeIdx={welcomeIdx}
             welcomeVisible={welcomeVisible}
+            locationStatus={locationStatus}
+            onRequestLocation={requestLocation}
           />
         </div>
       </div>

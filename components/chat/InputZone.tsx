@@ -1,5 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
+import type { LocationStatus } from "./useChat"
 
 const ALL_SUGGESTIONS = [
   // الأماكن
@@ -56,10 +57,29 @@ interface InputZoneProps {
   onStop: () => void
   welcomeIdx: number
   welcomeVisible: boolean
+  locationStatus: LocationStatus
+  onRequestLocation: () => void
+}
+
+/** نصّ/سمة زرّ الموقع بحسب الحالة — واحدة لعرضها ولإتاحة الضغط. */
+function locationButtonProps(status: LocationStatus) {
+  switch (status) {
+    case "granted":
+      return { label: "✓", title: "تم تفعيل موقعك — النتائج القريبة تُحسب من موقعك الفعلي", cls: "granted" }
+    case "requesting":
+      return { label: "…", title: "جارٍ طلب موقعك من المتصفح", cls: "requesting" }
+    case "denied":
+      return { label: "📍", title: "تعذّر الوصول لموقعك — يمكنك إعادة المحاولة أو ذكر مكان قريب منك بدلاً", cls: "denied" }
+    case "unsupported":
+      return { label: "📍", title: "متصفّحك لا يدعم مشاركة الموقع — يمكنك ذكر مكان قريب منك بدلاً", cls: "denied" }
+    default:
+      return { label: "📍", title: "شارك موقعك لنتائج \"الأقرب مني\" الفعلية (اختياري)", cls: "idle" }
+  }
 }
 
 export default function InputZone({
-  hasMessages, input, setInput, isLoading, onSend, onStop, welcomeIdx, welcomeVisible
+  hasMessages, input, setInput, isLoading, onSend, onStop, welcomeIdx, welcomeVisible,
+  locationStatus, onRequestLocation
 }: InputZoneProps) {
   const [suggestions, setSuggestions] = useState(() => pickRandom(ALL_SUGGESTIONS, 6))
 
@@ -82,6 +102,21 @@ export default function InputZone({
         </div>
       )}
       <div className="gm-input-box">
+        {(() => {
+          const loc = locationButtonProps(locationStatus)
+          return (
+            <button
+              type="button"
+              className={`gm-location-btn ${loc.cls}`}
+              onClick={onRequestLocation}
+              disabled={locationStatus === "requesting"}
+              title={loc.title}
+              aria-label={loc.title}
+            >
+              {loc.label}
+            </button>
+          )
+        })()}
         <textarea
           className="gm-textarea"
           value={input}

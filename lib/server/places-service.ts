@@ -107,9 +107,19 @@ export async function searchPlaces(params: {
     }
   }
 
-  bindings.push(limit)
+  const whereClause = conditions.length ? conditions.join(" AND ") : "1=1"
 
   try {
+    // العدّ الحقيقي (بلا LIMIT) — مستقلّ عن قطع النتائج المعروضة
+    const [countRows] = await db.query<RowDataPacket[]>(
+      `SELECT COUNT(*) as total
+       FROM places_data pd
+       LEFT JOIN places_categories pc ON pc.id = pd.place_category
+       WHERE ${whereClause}`,
+      bindings
+    )
+    const total = Number((countRows[0] as any)?.total) || 0
+
     const [rows] = await db.query<PlaceRow[]>(
       `SELECT pd.id,
               ${DECODE("pd.place_name")} as place_name,
@@ -119,10 +129,10 @@ export async function searchPlaces(params: {
               pc.category_name${distanceSelect}
        FROM places_data pd
        LEFT JOIN places_categories pc ON pc.id = pd.place_category
-       WHERE ${conditions.length ? conditions.join(" AND ") : "1=1"}
+       WHERE ${whereClause}
        ${orderClause}
        LIMIT ?`,
-      bindings
+      [...bindings, limit]
     )
 
     const results = (rows as PlaceRow[]).map(row => ({
@@ -133,7 +143,7 @@ export async function searchPlaces(params: {
       success: true,
       data: {
         results,
-        total: results.length,
+        total,
         query: params.query || params.category || params.city || ""
       }
     }

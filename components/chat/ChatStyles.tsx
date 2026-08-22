@@ -234,6 +234,11 @@ export default function ChatStyles() {
       .gm-send-btn.stop { background: #f1f3f4; color: #444; border: 2px solid #dadce0; }
       .gm-send-btn.stop:hover { background: #e8eaed; }
       .gm-send-btn:disabled { background: #e8eaed; color: #9aa0a6; cursor: not-allowed; }
+      .gm-location-btn { width: 34px; height: 34px; border-radius: 50%; border: 1px solid #dde3ea; background: transparent; color: #6e757c; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s, border-color 0.15s, color 0.15s; }
+      .gm-location-btn:hover:not(:disabled) { background: #f1f3f4; border-color: #bdc1c6; }
+      .gm-location-btn.granted { background: #eef3d9; border-color: #b1bd52; color: #6b7a1f; }
+      .gm-location-btn.requesting { cursor: wait; opacity: 0.6; }
+      .gm-location-btn.denied { border-color: #e8bdbd; color: #b3554f; }
       .gm-hint { text-align: center; font-size: 12px; color: #6e757c; margin-top: 9px; }
       .gm-dark-btn { width: 34px; height: 34px; border-radius: 50%; border: 1px solid #dadce0; background: transparent; color: #5f6368; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s, border-color 0.15s, color 0.15s; }
       .gm-dark-btn:hover { background: #f1f3f4; border-color: #bdc1c6; }
@@ -267,6 +272,10 @@ export default function ChatStyles() {
       .gm-root.dark .gm-textarea { color: #e3e3e3; }
       .gm-root.dark .gm-textarea::placeholder { color: #5f6368; }
       .gm-root.dark .gm-send-btn:disabled { background: #2d2e30; color: #5f6368; }
+      .gm-root.dark .gm-location-btn { border-color: #3c3f43; color: #9aa0a6; }
+      .gm-root.dark .gm-location-btn:hover:not(:disabled) { background: #2d2e30; border-color: #5f6368; }
+      .gm-root.dark .gm-location-btn.granted { background: #2d331a; border-color: #b1bd52; color: #c4d16a; }
+      .gm-root.dark .gm-location-btn.denied { border-color: #5f3b3b; color: #d98f8f; }
       .gm-root.dark .gm-sources-sep { background: #3c3f43; }
       .gm-root.dark .gm-source-card { background: #1e1f20; border-color: #3c3f43; color: #bdc1c6; }
       .gm-root.dark .gm-source-card:hover { background: #2d2e30; border-color: #5f6368; }
